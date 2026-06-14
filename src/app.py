@@ -159,8 +159,12 @@ class FastDividerApp(QObject):
             logger.debug("获取操作正在进行中，跳过本次按键")
             return
 
-        # 异步获取选中文本
-        self._clipboard.get_selected_text(self._on_text_received)
+        try:
+            # 异步获取选中文本
+            self._clipboard.get_selected_text(self._on_text_received)
+        except Exception:
+            self._capture_lock.release()
+            raise
 
     def _on_text_received(self, text: Optional[str]) -> None:
         """文本获取完成的回调"""

@@ -497,4 +497,4 @@ class SettingsDialog(QDialog):
             self._hotkey_manager.update_hotkey(DEFAULT_CONFIG["hotkey"])
 
         logger.info("设置已恢复为默认值")
-        self.accept()
+        QMessageBox.information(self, "提示", "已全部恢复默认设置")

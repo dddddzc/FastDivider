@@ -17,7 +17,7 @@ from typing import Optional
 
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QRect
-from PyQt6.QtGui import QPainter, QColor, QCursor, QFont, QPainterPath
+from PyQt6.QtGui import QPainter, QColor, QCursor, QFont, QPainterPath, QPaintEvent
 
 logger = logging.getLogger(__name__)
 
@@ -281,7 +281,7 @@ class ToastWindow(QWidget):
         self.hide()
         self.setWindowOpacity(1.0)
 
-    def paintEvent(self, event) -> None:  # type: ignore[override]
+    def paintEvent(self, event: QPaintEvent) -> None:
         """自定义绘制：阴影 + 圆角半透明背景
 
         手动绘制阴影层，避免 QGraphicsDropShadowEffect

@@ -41,9 +41,13 @@ class HistoryManager:
             try:
                 with open(self._path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                self._entries = [
-                    HistoryEntry(**entry) for entry in data
-                ]
+                entries = []
+                for entry in data:
+                    try:
+                        entries.append(HistoryEntry(**entry))
+                    except TypeError as e:
+                        logger.warning("跳过损坏的历史记录条目: %s - %s", entry, e)
+                self._entries = entries
                 logger.info("历史记录已加载: %d 条", len(self._entries))
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning("历史记录加载失败: %s", e)

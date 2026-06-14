@@ -28,7 +28,7 @@ DEFAULT_CONFIG = {
 # 配置文件路径
 def _get_config_dir() -> Path:
     """获取配置文件目录路径"""
-    config_dir = Path(os.environ.get("APPDATA", Path.home())) / "FastDivider"
+    config_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "FastDivider"
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
 

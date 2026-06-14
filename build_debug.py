@@ -15,18 +15,28 @@ BUILD_DIR = PROJECT_ROOT / "build"
 
 
 def clean_build() -> None:
-    """清理之前的构建产物和中间文件"""
-    # 构建产物
+    """清理本次构建（调试版）的产物和中间文件
+
+    只清理调试版对应的文件，不影响正式版产物。
+    """
+    # 清理 dist 中的目标 EXE（仅调试版，不删除正式版或其他文件）
+    target_exe = DIST_DIR / "FastDivider_debug.exe"
+    if target_exe.exists():
+        target_exe.unlink()
+        print(f"已清理: {target_exe}")
+
+    # 清理 build 中间目录（与正式版共享）
     if BUILD_DIR.exists():
         shutil.rmtree(BUILD_DIR)
         print(f"已清理: {BUILD_DIR}")
 
-    # .spec 文件（PyInstaller 自动生成的）
-    for spec in PROJECT_ROOT.glob("*.spec"):
-        spec.unlink()
-        print(f"已清理: {spec}")
+    # 清理 PyInstaller 自动生成的 .spec（仅调试版）
+    spec_file = PROJECT_ROOT / "FastDivider_debug.spec"
+    if spec_file.exists():
+        spec_file.unlink()
+        print(f"已清理: {spec_file}")
 
-    # __pycache__ 目录
+    # 清理 __pycache__ 目录
     for pycache in PROJECT_ROOT.rglob("__pycache__"):
         shutil.rmtree(pycache, ignore_errors=True)
         print(f"已清理: {pycache}")
