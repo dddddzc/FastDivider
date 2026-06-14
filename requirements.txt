@@ -1,0 +1,4 @@
+PyQt6>=6.6.0
+pywin32>=306
+pyperclip>=1.9.0
+PyInstaller>=6.5.0

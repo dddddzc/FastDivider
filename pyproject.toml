@@ -1,0 +1,22 @@
+[project]
+name = "FastDivider"
+version = "1.0.0"
+description = "极速除法助手 - 选中数字按快捷键即可计算除法，轻量级 Windows 桌面工具"
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6>=6.6.0",
+    "pywin32>=306",
+    "pyperclip>=1.9.0",
+]
+
+[project.optional-dependencies]
+build = [
+    "PyInstaller>=6.5.0",
+]
+
+[project.scripts]
+fastdivider = "src.main:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
