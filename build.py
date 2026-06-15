@@ -216,6 +216,7 @@ def build_exe() -> None:
         "--hidden-import=src.core.hotkey_manager",
         "--hidden-import=src.core.history",
         "--hidden-import=src.core.updater",
+        "--hidden-import=src.core.uia_reader",
         "--hidden-import=src.ui",
         "--hidden-import=src.ui.toast_window",
         "--hidden-import=src.ui.tray_icon",
