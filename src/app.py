@@ -424,8 +424,8 @@ class FastDividerApp(QObject):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         msg.setDefaultButton(QMessageBox.StandardButton.Yes)
-        msg.setButtonText(QMessageBox.StandardButton.Yes, "立即更新")
-        msg.setButtonText(QMessageBox.StandardButton.No, "稍后再说")
+        msg.button(QMessageBox.StandardButton.Yes).setText("立即更新")
+        msg.button(QMessageBox.StandardButton.No).setText("稍后再说")
         return msg.exec() == QMessageBox.StandardButton.Yes
 
     def _show_about(self) -> None:
