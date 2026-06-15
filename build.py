@@ -91,8 +91,84 @@ def find_qt_plugins() -> list[str]:
     return plugins
 
 
+def get_version() -> str:
+    """从 pyproject.toml 读取版本号"""
+    pyproject_path = PROJECT_ROOT / "pyproject.toml"
+    if pyproject_path.exists():
+        content = pyproject_path.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            line = line.strip()
+            if line.startswith("version"):
+                version = line.split("=")[-1].strip().strip('"').strip("'")
+                if version:
+                    return version
+    return "1.0.0"
+
+
+def sync_version_info() -> None:
+    """将 pyproject.toml 中的版本号同步到 version_info.txt
+
+    确保 EXE 的 Windows 文件版本信息与实际版本一致。
+    """
+    version = get_version()
+    parts = version.split(".")
+    # Pad to 4 parts: major.minor.patch.build
+    while len(parts) < 4:
+        parts.append("0")
+    filevers = f"({parts[0]}, {parts[1]}, {parts[2]}, {parts[3]})"
+    prodvers = filevers
+    version_str = f"{parts[0]}.{parts[1]}.{parts[2]}.{parts[3]}"
+
+    version_txt = f"""# UTF-8
+#
+# FastDivider version info for PyInstaller
+# Auto-generated from pyproject.toml by build.py
+
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers={filevers},
+    prodvers={prodvers},
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          '080404b0',
+          [
+            StringStruct('CompanyName', 'FastDivider'),
+            StringStruct('FileDescription', '极速除法助手 - 选中数字快速计算'),
+            StringStruct('FileVersion', '{version_str}'),
+            StringStruct('InternalName', 'FastDivider'),
+            StringStruct('LegalCopyright', 'Copyright 2025'),
+            StringStruct('OriginalFilename', 'FastDivider.exe'),
+            StringStruct('ProductName', 'FastDivider'),
+            StringStruct('ProductVersion', '{version_str}'),
+          ]
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct('Translation', [2052, 1200])])
+  ]
+)
+"""
+    version_file = PROJECT_ROOT / "version_info.txt"
+    version_file.write_text(version_txt, encoding="utf-8")
+    print(f"版本信息已同步: {version} → {version_file}")
+
+
 def build_exe() -> None:
     """使用 PyInstaller 构建单文件 EXE"""
+    # 同步版本信息
+    sync_version_info()
+    version = get_version()
+    print(f"构建版本: {version}")
+
     # PyInstaller 命令参数
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -105,12 +181,14 @@ def build_exe() -> None:
         # 图标
         f"--icon={PROJECT_ROOT / 'src' / 'resources' / 'icon.ico'}",
 
-        # 版本信息（如果文件存在）
+        # 版本信息
         f"--version-file={PROJECT_ROOT / 'version_info.txt'}",
 
         # 资源文件
         f"--add-data={PROJECT_ROOT / 'src' / 'resources' / 'icon.ico'};resources",
         f"--add-data={PROJECT_ROOT / 'src' / 'resources' / 'icon.png'};resources",
+        # 嵌入 pyproject.toml 供运行时读取版本号
+        f"--add-data={PROJECT_ROOT / 'pyproject.toml'};.",
 
         # 隐式导入（PyInstaller 可能遗漏的模块）
         "--hidden-import=PyQt6.sip",
@@ -136,6 +214,7 @@ def build_exe() -> None:
         "--hidden-import=src.core.clipboard_reader",
         "--hidden-import=src.core.hotkey_manager",
         "--hidden-import=src.core.history",
+        "--hidden-import=src.core.updater",
         "--hidden-import=src.ui",
         "--hidden-import=src.ui.toast_window",
         "--hidden-import=src.ui.tray_icon",
@@ -145,11 +224,6 @@ def build_exe() -> None:
         # 入口脚本
         str(PROJECT_ROOT / "src" / "main.py"),
     ]
-
-    # 如果没有 version_info.txt，去掉版本信息参数
-    version_file = PROJECT_ROOT / "version_info.txt"
-    if not version_file.exists():
-        cmd = [arg for arg in cmd if not arg.startswith("--version-file")]
 
     # 添加 pywin32 DLL（如果找到）
     for dll in find_pywin32_dlls():

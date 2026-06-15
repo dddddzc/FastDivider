@@ -58,6 +58,8 @@ def build_debug_exe() -> None:
         # 资源文件
         f"--add-data={PROJECT_ROOT / 'src' / 'resources' / 'icon.ico'};resources",
         f"--add-data={PROJECT_ROOT / 'src' / 'resources' / 'icon.png'};resources",
+        # 嵌入 pyproject.toml 供运行时读取版本号
+        f"--add-data={PROJECT_ROOT / 'pyproject.toml'};.",
 
         # 隐式导入
         "--hidden-import=PyQt6.sip",
@@ -81,6 +83,7 @@ def build_debug_exe() -> None:
         "--hidden-import=src.core.clipboard_reader",
         "--hidden-import=src.core.hotkey_manager",
         "--hidden-import=src.core.history",
+        "--hidden-import=src.core.updater",
         "--hidden-import=src.ui",
         "--hidden-import=src.ui.toast_window",
         "--hidden-import=src.ui.tray_icon",

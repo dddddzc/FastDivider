@@ -27,6 +27,7 @@ from src.core.number_parser import parse_number, format_division, format_number_
 from src.core.clipboard_reader import ClipboardReader
 from src.core.hotkey_manager import HotkeyManager
 from src.core.history import HistoryManager
+from src.core.updater import Updater, get_current_version
 from src.ui.toast_window import ToastWindow
 from src.ui.tray_icon import TrayIcon
 
@@ -91,12 +92,24 @@ class FastDividerApp(QObject):
         self._tray.history_requested.connect(self._show_history)
         self._tray.reset_requested.connect(self._do_reset)
         self._tray.auto_start_changed.connect(self._set_auto_start)
+        self._tray.check_update_requested.connect(self._check_update_manual)
         self._tray.about_requested.connect(self._show_about)
         self._tray.quit_requested.connect(self._quit)
+
+        # 更新管理器
+        self._updater = Updater()
+        self._updater.update_available.connect(self._on_update_available)
+        self._updater.no_update.connect(self._on_no_update)
+        self._updater.error_occurred.connect(self._on_update_error)
+        self._updater.download_progress.connect(self._on_download_progress)
+        self._updater.download_complete.connect(self._on_download_complete)
 
         # 对话框引用（懒加载）
         self._settings_dialog = None
         self._history_dialog = None
+
+        # 更新检查模式标记
+        self._update_check_silent = True
 
         # 信号连接：QueuedConnection 提供事件循环缓冲
         self._capture_signal.connect(
@@ -127,6 +140,9 @@ class FastDividerApp(QObject):
             "FastDivider 已启动",
             duration_ms=2000,
         )
+
+        # 启动时自动检查更新（静默模式）
+        self._check_update_silent()
 
         logger.info("FastDivider 应用已启动，等待第一个数字...")
 
@@ -332,13 +348,94 @@ class FastDividerApp(QObject):
         except Exception as e:
             logger.error("开机启动设置失败: %s", e)
 
+    # --- 更新检测 ---
+    def _check_update_silent(self) -> None:
+        """启动时静默检查更新（有新版本才提示）"""
+        logger.info("启动时静默检查更新...")
+        self._update_check_silent = True
+        self._updater.check_for_updates()
+
+    def _check_update_manual(self) -> None:
+        """手动检查更新（始终显示结果）"""
+        logger.info("用户手动检查更新...")
+        self._update_check_silent = False
+        self._toast.show_toast("正在检查更新...", duration_ms=2000)
+        self._updater.check_for_updates()
+
+    def _on_update_available(self, current_version: str, latest_version: str) -> None:
+        """发现新版本，弹窗提示"""
+        logger.info("发现新版本: %s → %s", current_version, latest_version)
+        reply = self._show_update_dialog(current_version, latest_version)
+        if reply:
+            self._updater.start_download()
+
+    def _on_no_update(self) -> None:
+        """已是最新版本（静默模式不提示）"""
+        logger.info("已是最新版本")
+        if not self._update_check_silent:
+            self._toast.show_toast("已是最新版本 ✓", duration_ms=2000)
+
+    def _on_update_error(self, error_msg: str) -> None:
+        """更新检查出错"""
+        logger.error("更新检查出错: %s", error_msg)
+        self._toast.show_toast(
+            f"检查更新失败: {error_msg}",
+            duration_ms=3000,
+            is_error=True,
+        )
+
+    def _on_download_progress(self, pct: int) -> None:
+        """下载进度更新"""
+        if pct % 20 == 0 or pct >= 100:
+            logger.info("下载进度: %d%%", pct)
+
+    def _on_download_complete(self) -> None:
+        """下载完成，询问是否立即更新"""
+        logger.info("新版本下载完成")
+        from PyQt6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            None,
+            "下载完成",
+            "新版本已下载完成，是否立即更新并重启？\n\n"
+            "点击「确定」将立即替换并重启应用。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._updater.apply_update_and_restart()
+
+    def _show_update_dialog(self, current_version: str, latest_version: str) -> bool:
+        """显示更新提示对话框
+
+        Returns:
+            True 表示用户选择更新
+        """
+        from PyQt6.QtWidgets import QMessageBox
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setWindowTitle("发现新版本")
+        msg.setText(f"发现新版本 v{latest_version}")
+        msg.setInformativeText(
+            f"当前版本：v{current_version}\n"
+            f"最新版本：v{latest_version}\n\n"
+            f"是否立即下载更新？"
+        )
+        msg.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
+        msg.setButtonText(QMessageBox.StandardButton.Yes, "立即更新")
+        msg.setButtonText(QMessageBox.StandardButton.No, "稍后再说")
+        return msg.exec() == QMessageBox.StandardButton.Yes
+
     def _show_about(self) -> None:
         """显示关于对话框"""
         from PyQt6.QtWidgets import QMessageBox
+        version = get_current_version()
         QMessageBox.about(
             None,
             "关于 FastDivider",
-            "FastDivider 极速除法助手 v1.0\n\n"
+            f"FastDivider 极速除法助手 v{version}\n\n"
             "连续选中数字进行快速除法计算。\n\n"
             "轻量、高效、开箱即用。",
         )

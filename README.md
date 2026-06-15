@@ -24,7 +24,8 @@ FastDivider/
 │   │   ├── hotkey_manager.py   # 全局快捷键（GetAsyncKeyState轮询）
 │   │   ├── clipboard_reader.py # 剪贴板读取（SendInput模拟Ctrl+C）
 │   │   ├── number_parser.py    # 数字解析（整数/负数/小数/科学计数法/千位分隔）
-│   │   └── history.py          # 历史记录（JSON持久化、导出TXT）
+│   │   ├── history.py          # 历史记录（JSON持久化、导出TXT）
+│   │   └── updater.py          # 自动更新（GitHub Releases API检查/下载/替换）
 │   ├── ui/
 │   │   ├── toast_window.py     # Toast弹窗（手动阴影绘制、悬浮模式）
 │   │   ├── tray_icon.py        # 系统托盘（右键菜单）
@@ -90,6 +91,27 @@ python build.py
 python build_debug.py
 # 输出 dist/FastDivider_debug.exe（保留控制台窗口）
 ```
+
+## 自动更新
+
+FastDivider 支持通过 GitHub Releases 自动检查和下载更新：
+
+- **启动时自动检查**：每次启动时后台静默检查 GitHub 是否有新版本，有新版本时弹窗提示
+- **手动检查**：托盘菜单 →「🔍 检查更新」随时手动检查
+- **一键更新**：确认更新后自动下载新版本 EXE，通过替换脚本完成替换并自动重启
+
+**发布新版本的流程**：
+
+1. 修改 `pyproject.toml` 中的 `version` 字段（如 `1.0.1`）
+2. 运行 `python build.py` 构建新版本 EXE
+3. 在 GitHub 创建 tag 并发布 Release：
+   ```
+   git tag v1.0.1
+   git push origin v1.0.1
+   ```
+4. 在 GitHub Releases 页面将 `dist/FastDivider.exe` 上传为附件
+
+**要求**：Release 的 tag 格式必须为 `vX.Y.Z`（如 `v1.0.1`），且附件中必须包含 `FastDivider.exe`。
 
 ## 已知限制
 

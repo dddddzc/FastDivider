@@ -25,6 +25,7 @@ class TrayIcon(QObject):
     history_requested = pyqtSignal()
     reset_requested = pyqtSignal()
     auto_start_changed = pyqtSignal(bool)
+    check_update_requested = pyqtSignal()
     about_requested = pyqtSignal()
     quit_requested = pyqtSignal()
 
@@ -84,6 +85,13 @@ class TrayIcon(QObject):
         self._auto_start_action.setChecked(self._auto_start)
         self._auto_start_action.triggered.connect(self._on_auto_start_toggled)
         self._menu.addAction(self._auto_start_action)
+
+        self._menu.addSeparator()
+
+        # 检查更新
+        update_action = QAction("🔍 检查更新", self._menu)
+        update_action.triggered.connect(self.check_update_requested.emit)
+        self._menu.addAction(update_action)
 
         self._menu.addSeparator()
 
