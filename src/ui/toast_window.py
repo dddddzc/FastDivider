@@ -69,6 +69,13 @@ class ToastWindow(QWidget):
 
         self._init_ui()
 
+        # 监听屏幕配置变化（显示器插拔），自动重新定位悬浮窗口
+        try:
+            from PyQt6.QtGui import QGuiApplication
+            QGuiApplication.primaryScreenChanged.connect(self._on_screen_config_changed)
+        except Exception:
+            pass
+
     def _init_ui(self) -> None:
         """初始化 UI 组件"""
         # 无边框、不抢焦点、置顶、工具窗口
@@ -204,6 +211,28 @@ class ToastWindow(QWidget):
             text[:30], duration_ms, self._is_pinned, is_result,
         )
 
+    def _on_screen_config_changed(self) -> None:
+        """显示器配置变化回调（插拔显示器）
+
+        将当前悬浮的 Toast 重新定位到新屏幕范围内。
+        解决拔掉外接显示器后悬浮窗部分落在主屏外无法关闭的问题。
+        """
+        if not self._is_pinned or not self.isVisible():
+            return
+        logger.debug("检测到屏幕配置变化，重新定位悬浮 Toast")
+        # 短暂延迟后重新定位，给 Windows 时间完成窗口迁移
+        QTimer.singleShot(200, self._reposition_to_safe_area)
+
+    def _reposition_to_safe_area(self) -> None:
+        """将窗口重新定位到当前屏幕的安全区域内
+
+        优先使用鼠标所在屏幕，fallback 到主屏幕。
+        确保窗口完全可见（包括关闭按钮）。
+        """
+        if not self._is_pinned or not self.isVisible():
+            return
+        self._position_toast()
+
     def _close_pinned(self) -> None:
         """关闭按钮回调：关闭悬浮 Toast"""
         logger.debug("悬浮 Toast 用户手动关闭")
@@ -220,22 +249,23 @@ class ToastWindow(QWidget):
         self.setWindowOpacity(1.0)
 
     def _position_toast(self) -> None:
-        """根据配置定位 Toast 窗口"""
+        """根据配置定位 Toast 窗口，确保始终在屏幕可见区域内"""
         geo = self._get_screen_geometry()
 
         if self._position_mode == "mouse_near":
             pos = QCursor.pos()
             x = pos.x() + 15
             y = pos.y() + 15
-            # 确保不超出屏幕
-            x = min(x, geo.right() - self.width() - 10)
-            y = min(y, geo.bottom() - self.height() - 10)
         elif self._position_mode == "center":
             x = geo.center().x() - self.width() // 2
             y = geo.center().y() - self.height() // 2
         else:  # bottom_right
             x = geo.right() - self.width() - 30
             y = geo.bottom() - self.height() - 60
+
+        # 安全钳制：确保窗口不超出屏幕边界（包括关闭按钮）
+        x = max(geo.left() + 5, min(x, geo.right() - self.width() - 5))
+        y = max(geo.top() + 5, min(y, geo.bottom() - self.height() - 5))
 
         self.move(x, y)
 
