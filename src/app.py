@@ -30,6 +30,7 @@ from src.core.history import HistoryManager
 from src.core.updater import Updater, get_current_version
 from src.ui.toast_window import ToastWindow
 from src.ui.tray_icon import TrayIcon
+from src.ui.update_dialog import UpdateDialog
 
 logger = logging.getLogger(__name__)
 
@@ -101,12 +102,11 @@ class FastDividerApp(QObject):
         self._updater.update_available.connect(self._on_update_available)
         self._updater.no_update.connect(self._on_no_update)
         self._updater.error_occurred.connect(self._on_update_error)
-        self._updater.download_progress.connect(self._on_download_progress)
-        self._updater.download_complete.connect(self._on_download_complete)
 
         # 对话框引用（懒加载）
         self._settings_dialog = None
         self._history_dialog = None
+        self._update_dialog = None
 
         # 更新检查模式标记
         self._update_check_silent = True
@@ -365,11 +365,36 @@ class FastDividerApp(QObject):
             self._toast.show_toast("请稍后再试（距离上次检查太近）", duration_ms=2000)
 
     def _on_update_available(self, current_version: str, latest_version: str) -> None:
-        """发现新版本，弹窗提示"""
+        """发现新版本，弹窗确认并展示下载进度"""
         logger.info("发现新版本: %s → %s", current_version, latest_version)
-        reply = self._show_update_dialog(current_version, latest_version)
-        if reply:
-            self._updater.start_download()
+
+        self._update_dialog = UpdateDialog(current_version, latest_version)
+        self._update_dialog.accepted.connect(
+            lambda: self._start_update_download(self._update_dialog)
+        )
+
+        # 模态对话框，阻塞用户操作直到下载完成或取消
+        self._update_dialog.exec()
+
+    def _start_update_download(self, dialog: UpdateDialog) -> None:
+        """开始下载并连接进度信号到对话框"""
+        # 连接下载进度到对话框
+        self._updater.download_progress.connect(dialog.update_progress)
+        self._updater.download_complete.connect(dialog.on_download_complete)
+        self._updater.error_occurred.connect(dialog.on_download_error)
+
+        # 下载完成后自动安装重启
+        self._updater.download_complete.connect(
+            lambda: self._do_update_restart(dialog)
+        )
+
+        self._updater.start_download()
+
+    def _do_update_restart(self, dialog: UpdateDialog) -> None:
+        """下载完成，短暂延迟后安装并重启"""
+        from PyQt6.QtCore import QTimer
+        # 给用户 0.5s 看到"安装完成"，然后执行替换重启
+        QTimer.singleShot(500, self._updater.apply_update_and_restart)
 
     def _on_no_update(self) -> None:
         """已是最新版本（静默模式不提示）"""
@@ -386,50 +411,6 @@ class FastDividerApp(QObject):
                 duration_ms=3000,
                 is_error=True,
             )
-
-    def _on_download_progress(self, pct: int) -> None:
-        """下载进度更新"""
-        if pct % 20 == 0 or pct >= 100:
-            logger.info("下载进度: %d%%", pct)
-
-    def _on_download_complete(self) -> None:
-        """下载完成，询问是否立即更新"""
-        logger.info("新版本下载完成")
-        from PyQt6.QtWidgets import QMessageBox
-        reply = QMessageBox.question(
-            None,
-            "下载完成",
-            "新版本已下载完成，是否立即更新并重启？\n\n"
-            "点击「确定」将立即替换并重启应用。",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            self._updater.apply_update_and_restart()
-
-    def _show_update_dialog(self, current_version: str, latest_version: str) -> bool:
-        """显示更新提示对话框
-
-        Returns:
-            True 表示用户选择更新
-        """
-        from PyQt6.QtWidgets import QMessageBox
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Icon.Information)
-        msg.setWindowTitle("发现新版本")
-        msg.setText(f"发现新版本 v{latest_version}")
-        msg.setInformativeText(
-            f"当前版本：v{current_version}\n"
-            f"最新版本：v{latest_version}\n\n"
-            f"是否立即下载更新？"
-        )
-        msg.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
-        msg.button(QMessageBox.StandardButton.Yes).setText("立即更新")
-        msg.button(QMessageBox.StandardButton.No).setText("稍后再说")
-        return msg.exec() == QMessageBox.StandardButton.Yes
 
     def _show_about(self) -> None:
         """显示关于对话框"""

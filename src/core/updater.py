@@ -204,6 +204,9 @@ class UpdateCheckThread(QThread):
         body = data.get("body", "")
         assets = data.get("assets", [])
 
+        # 规范化版本号：去掉 'v' 前缀
+        version = tag_name.lstrip("v")
+
         # 查找 FastDivider zip 包（文件名匹配 FastDivider*.zip）
         download_url = ""
         for asset in assets:
@@ -215,7 +218,7 @@ class UpdateCheckThread(QThread):
         if not download_url:
             raise Exception("未在 release 中找到 FastDivider ZIP 包")
 
-        return tag_name, download_url, body
+        return version, download_url, body
 
 
 class UpdateDownloadThread(QThread):

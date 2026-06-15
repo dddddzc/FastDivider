@@ -90,6 +90,7 @@ def build_debug_exe() -> None:
         "--hidden-import=src.ui.tray_icon",
         "--hidden-import=src.ui.settings_dialog",
         "--hidden-import=src.ui.history_dialog",
+        "--hidden-import=src.ui.update_dialog",
 
         # 入口脚本
         str(PROJECT_ROOT / "src" / "main.py"),
