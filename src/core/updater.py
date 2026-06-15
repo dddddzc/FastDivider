@@ -1,13 +1,14 @@
 """更新检测模块
 
-通过 GitHub Releases API 检查新版本，下载并替换当前 EXE，
+通过 GitHub Releases API 检查新版本，下载 ZIP 包并解压替换当前 EXE，
 实现自动更新功能。
 
 更新流程：
 1. 检查 GitHub Releases 获取最新版本号
 2. 与当前版本比较
-3. 如有新版本，下载 EXE 到临时目录
-4. 生成替换脚本（.bat），在旧进程退出后替换并重启
+3. 如有新版本，下载 ZIP 包到临时目录
+4. 从 ZIP 中提取 EXE
+5. 生成替换脚本（.bat），在旧进程退出后替换并重启
 """
 
 import json
@@ -17,6 +18,7 @@ import sys
 import tempfile
 import urllib.request
 import urllib.error
+import zipfile
 from pathlib import Path
 from typing import Optional
 
@@ -124,21 +126,22 @@ class UpdateCheckThread(QThread):
         body = data.get("body", "")
         assets = data.get("assets", [])
 
-        # 查找 FastDivider.exe
+        # 查找 FastDivider zip 包（文件名匹配 FastDivider*.zip）
         download_url = ""
         for asset in assets:
-            if asset.get("name", "").lower() == "fastdivider.exe":
+            name = asset.get("name", "").lower()
+            if name.startswith("fastdivider") and name.endswith(".zip"):
                 download_url = asset.get("browser_download_url", "")
                 break
 
         if not download_url:
-            raise Exception("未在 release 中找到 FastDivider.exe")
+            raise Exception("未在 release 中找到 FastDivider ZIP 包")
 
         return tag_name, download_url, body
 
 
 class UpdateDownloadThread(QThread):
-    """后台线程：下载新版本 EXE
+    """后台线程：下载新版本 ZIP 并解压提取 EXE
 
     使用 QThread 避免阻塞 UI，支持进度报告。
     """
@@ -160,9 +163,10 @@ class UpdateDownloadThread(QThread):
             self.finished.emit(False, str(e))
 
     def _download(self) -> str:
-        """下载文件到临时目录，返回临时文件路径"""
+        """下载 ZIP 到临时目录，解压提取 EXE，返回 EXE 临时路径"""
         tmp_dir = tempfile.gettempdir()
-        tmp_file = os.path.join(tmp_dir, "FastDivider_update.exe")
+        zip_path = os.path.join(tmp_dir, "FastDivider_update.zip")
+        exe_path = os.path.join(tmp_dir, "FastDivider_update.exe")
 
         req = urllib.request.Request(
             self._download_url,
@@ -178,7 +182,7 @@ class UpdateDownloadThread(QThread):
             downloaded = 0
             chunk_size = 8192
 
-            with open(tmp_file, "wb") as f:
+            with open(zip_path, "wb") as f:
                 while True:
                     chunk = resp.read(chunk_size)
                     if not chunk:
@@ -190,8 +194,41 @@ class UpdateDownloadThread(QThread):
                         pct = int(downloaded * 100 / total_size)
                         self.progress.emit(pct)
 
-        logger.info("下载完成: %s (%d bytes)", tmp_file, downloaded)
-        return tmp_file
+        logger.info("下载完成: %s (%d bytes)", zip_path, downloaded)
+
+        # 从 ZIP 中提取 FastDivider.exe
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                names = zf.namelist()
+                logger.info("ZIP 内容: %s", names)
+                # 查找 FastDivider.exe（可能在子目录中）
+                exe_name = None
+                for name in names:
+                    if name.lower().endswith("fastdivider.exe"):
+                        exe_name = name
+                        break
+
+                if not exe_name:
+                    raise Exception("ZIP 中未找到 FastDivider.exe")
+
+                # 提取到临时目录
+                zf.extract(exe_name, tmp_dir)
+                extracted = os.path.join(tmp_dir, exe_name)
+
+                # 如果解压路径与目标路径不同，重命名
+                if extracted != exe_path:
+                    if os.path.exists(exe_path):
+                        os.remove(exe_path)
+                    os.rename(extracted, exe_path)
+        finally:
+            # 清理 ZIP 文件
+            try:
+                os.remove(zip_path)
+            except Exception:
+                pass
+
+        logger.info("解压完成: %s", exe_path)
+        return exe_path
 
 
 class Updater(QObject):
@@ -280,12 +317,13 @@ class Updater(QObject):
             assets = data.get("assets", [])
             download_url = ""
             for asset in assets:
-                if asset.get("name", "").lower() == "fastdivider.exe":
+                name = asset.get("name", "").lower()
+                if name.startswith("fastdivider") and name.endswith(".zip"):
                     download_url = asset.get("browser_download_url", "")
                     break
 
             if not download_url:
-                self.error_occurred.emit("未在 release 中找到 FastDivider.exe")
+                self.error_occurred.emit("未在 release 中找到 FastDivider ZIP 包")
                 return
 
             self._latest_download_url = download_url

@@ -7,6 +7,7 @@
 import subprocess
 import sys
 import shutil
+import zipfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent
@@ -241,6 +242,15 @@ def build_exe() -> None:
             print(f"\n构建成功！")
             print(f"EXE 路径: {exe_path}")
             print(f"文件大小: {size_mb:.1f} MB")
+
+            # 自动创建 ZIP 包用于 GitHub Release
+            zip_name = f"FastDivider-v{version}.zip"
+            zip_path = DIST_DIR / zip_name
+            print(f"\n正在创建 ZIP 包: {zip_name}...")
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+                z.write(exe_path, "FastDivider.exe")
+            zip_size_mb = zip_path.stat().st_size / (1024 * 1024)
+            print(f"ZIP 包已创建: {zip_path} ({zip_size_mb:.1f} MB)")
         else:
             print("\n构建完成但未找到 EXE 文件")
     else:

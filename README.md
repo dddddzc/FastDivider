@@ -103,15 +103,15 @@ FastDivider 支持通过 GitHub Releases 自动检查和下载更新：
 **发布新版本的流程**：
 
 1. 修改 `pyproject.toml` 中的 `version` 字段（如 `1.0.1`）
-2. 运行 `python build.py` 构建新版本 EXE
+2. 运行 `python build.py` 构建新版本（自动生成 EXE 和 ZIP）
 3. 在 GitHub 创建 tag 并发布 Release：
    ```
    git tag v1.0.1
    git push origin v1.0.1
    ```
-4. 在 GitHub Releases 页面将 `dist/FastDivider.exe` 上传为附件
+4. 在 GitHub Releases 页面将 `dist/FastDivider-v1.0.1.zip` 上传为附件
 
-**要求**：Release 的 tag 格式必须为 `vX.Y.Z`（如 `v1.0.1`），且附件中必须包含 `FastDivider.exe`。
+**要求**：Release 的 tag 格式必须为 `vX.Y.Z`（如 `v1.0.1`），且附件中必须包含以 `FastDivider` 开头、`.zip` 结尾的 ZIP 包。
 
 ## 已知限制
 

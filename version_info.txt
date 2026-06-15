@@ -1,7 +1,7 @@
 # UTF-8
 #
 # FastDivider version info for PyInstaller
-# This file embeds Windows version information into the EXE
+# Auto-generated from pyproject.toml by build.py
 
 VSVersionInfo(
   ffi=FixedFileInfo(
