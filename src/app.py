@@ -359,8 +359,10 @@ class FastDividerApp(QObject):
         """手动检查更新（始终显示结果）"""
         logger.info("用户手动检查更新...")
         self._update_check_silent = False
-        self._toast.show_toast("正在检查更新...", duration_ms=2000)
-        self._updater.check_for_updates()
+        if self._updater.check_for_updates():
+            self._toast.show_toast("正在检查更新...", duration_ms=2000)
+        else:
+            self._toast.show_toast("请稍后再试（距离上次检查太近）", duration_ms=2000)
 
     def _on_update_available(self, current_version: str, latest_version: str) -> None:
         """发现新版本，弹窗提示"""
@@ -376,13 +378,14 @@ class FastDividerApp(QObject):
             self._toast.show_toast("已是最新版本 ✓", duration_ms=2000)
 
     def _on_update_error(self, error_msg: str) -> None:
-        """更新检查出错"""
+        """更新检查出错（静默模式不提示）"""
         logger.error("更新检查出错: %s", error_msg)
-        self._toast.show_toast(
-            f"检查更新失败: {error_msg}",
-            duration_ms=3000,
-            is_error=True,
-        )
+        if not self._update_check_silent:
+            self._toast.show_toast(
+                f"检查更新失败: {error_msg}",
+                duration_ms=3000,
+                is_error=True,
+            )
 
     def _on_download_progress(self, pct: int) -> None:
         """下载进度更新"""

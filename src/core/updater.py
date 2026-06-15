@@ -14,8 +14,10 @@
 import json
 import logging
 import os
+import ssl
 import sys
 import tempfile
+import time
 import urllib.request
 import urllib.error
 import zipfile
@@ -30,6 +32,13 @@ logger = logging.getLogger(__name__)
 GITHUB_REPO = "dddddzc/FastDivider"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"
+
+# 请求去抖：最小检查间隔（秒）
+MIN_CHECK_INTERVAL = 30
+
+# 重试参数
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 2  # 秒，指数退避：2, 4, 8
 
 
 def get_current_version() -> str:
@@ -76,6 +85,64 @@ def parse_version(version_str: str) -> tuple:
         return (0, 0, 0)
 
 
+def _is_retryable_error(error: Exception) -> bool:
+    """判断是否为可重试的网络错误"""
+    if isinstance(error, urllib.error.HTTPError):
+        # 403 rate limit 不应重试
+        # 5xx 服务端错误可以重试
+        return 500 <= error.code < 600
+    # SSL EOF、IncompleteRead、timeout 均可重试
+    return True
+
+
+def _http_get(url: str, timeout: int = 15) -> bytes:
+    """带重试的 HTTP GET 请求
+
+    对网络抖动（SSL EOF、IncompleteRead 等）自动重试，最多 3 次。
+    指数退避：2s → 4s → 8s
+
+    Args:
+        url: 请求 URL
+        timeout: 超时秒数
+
+    Returns:
+        响应体 bytes
+
+    Raises:
+        urllib.error.URLError: 重试耗尽后仍失败
+    """
+    last_error = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "FastDivider-Updater/1.0",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                # 频率限制不重试
+                raise
+            if not (500 <= e.code < 600):
+                raise
+            last_error = e
+        except (urllib.error.URLError, ssl.SSLError, OSError) as e:
+            last_error = e
+
+        if attempt < MAX_RETRIES:
+            delay = RETRY_BASE_DELAY * (2 ** attempt)
+            logger.warning("HTTP 请求失败 (第%d次重试, %ds后重试): %s",
+                           attempt + 1, delay, last_error)
+            time.sleep(delay)
+
+    raise last_error
+
+
 class UpdateCheckThread(QThread):
     """后台线程：检查 GitHub 最新版本
 
@@ -97,10 +164,29 @@ class UpdateCheckThread(QThread):
             has_update = parse_version(latest_version) > parse_version(current)
             self.finished.emit(has_update, latest_version, current, None)
 
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                msg = "GitHub API 频率限制，请稍后再试"
+            elif e.code == 404:
+                msg = "尚未发布任何版本"
+            else:
+                msg = f"服务器错误 (HTTP {e.code})"
+            logger.error("版本检查失败: %s", msg)
+            current = get_current_version()
+            self.finished.emit(False, current, current, msg)
         except Exception as e:
             logger.error("版本检查失败: %s", e)
             current = get_current_version()
-            self.finished.emit(False, current, current, str(e))
+            # 给用户友好的中文提示
+            if "EOF" in str(e) or "IncompleteRead" in str(e):
+                msg = "网络连接不稳定，请稍后重试"
+            elif "timeout" in str(e).lower():
+                msg = "连接超时，请检查网络"
+            elif "getaddrinfo" in str(e).lower():
+                msg = "无法解析 GitHub 域名，请检查网络"
+            else:
+                msg = f"检查更新失败: {e}"
+            self.finished.emit(False, current, current, msg)
 
     def _check_github(self) -> tuple[str, str, str]:
         """访问 GitHub API 获取最新 release 信息
@@ -111,16 +197,8 @@ class UpdateCheckThread(QThread):
         Raises:
             Exception: 网络错误或 API 错误
         """
-        req = urllib.request.Request(
-            GITHUB_API_URL,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "FastDivider-Updater/1.0",
-            },
-        )
-
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        raw = _http_get(GITHUB_API_URL, timeout=15)
+        data = json.loads(raw.decode("utf-8"))
 
         tag_name = data.get("tag_name", "v0.0.0")
         body = data.get("body", "")
@@ -160,7 +238,12 @@ class UpdateDownloadThread(QThread):
             self.finished.emit(True, tmp_path)
         except Exception as e:
             logger.error("下载失败: %s", e)
-            self.finished.emit(False, str(e))
+            msg = f"下载失败: {e}"
+            if "EOF" in str(e) or "IncompleteRead" in str(e):
+                msg = "下载中断（网络不稳定），请稍后重试"
+            elif "timeout" in str(e).lower():
+                msg = "下载超时，请检查网络"
+            self.finished.emit(False, msg)
 
     def _download(self) -> str:
         """下载 ZIP 到临时目录，解压提取 EXE，返回 EXE 临时路径"""
@@ -168,33 +251,13 @@ class UpdateDownloadThread(QThread):
         zip_path = os.path.join(tmp_dir, "FastDivider_update.zip")
         exe_path = os.path.join(tmp_dir, "FastDivider_update.exe")
 
-        req = urllib.request.Request(
-            self._download_url,
-            headers={
-                "User-Agent": "FastDivider-Updater/1.0",
-            },
-        )
+        raw = _http_get(self._download_url, timeout=300)
+        total_size = len(raw)
 
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            total_size = resp.headers.get("Content-Length")
-            total_size = int(total_size) if total_size else 0
+        with open(zip_path, "wb") as f:
+            f.write(raw)
 
-            downloaded = 0
-            chunk_size = 8192
-
-            with open(zip_path, "wb") as f:
-                while True:
-                    chunk = resp.read(chunk_size)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    downloaded += len(chunk)
-
-                    if total_size > 0:
-                        pct = int(downloaded * 100 / total_size)
-                        self.progress.emit(pct)
-
-        logger.info("下载完成: %s (%d bytes)", zip_path, downloaded)
+        logger.info("下载完成: %s (%d bytes)", zip_path, total_size)
 
         # 从 ZIP 中提取 FastDivider.exe
         try:
@@ -237,9 +300,8 @@ class Updater(QObject):
     协调版本检查、下载、替换重启的完整流程。
 
     用法：
-        updater = Updater(current_exe_path)
-        updater.check_for_updates(silent=True)   # 静默检查（启动时）
-        updater.check_for_updates(silent=False)  # 手动检查
+        updater = Updater()
+        updater.check_for_updates()  # 启动后台检查
     """
 
     update_available = pyqtSignal(str, str)  # (current_version, latest_version)
@@ -256,6 +318,7 @@ class Updater(QObject):
         self._latest_download_url: str = ""
         self._latest_version: str = ""
         self._temp_exe_path: str = ""
+        self._last_check_time: float = 0.0
 
     def get_current_exe_path(self) -> str:
         """获取当前 EXE 的完整路径"""
@@ -266,11 +329,24 @@ class Updater(QObject):
             # 开发环境，返回 Python 解释器路径（仅用于测试）
             return sys.executable
 
-    def check_for_updates(self) -> None:
-        """启动后台版本检查"""
+    def check_for_updates(self) -> bool:
+        """启动后台版本检查
+
+        内置去抖：如果距离上次检查不足 MIN_CHECK_INTERVAL 秒，则跳过。
+
+        Returns:
+            True 如果已启动检查，False 如果因去抖而跳过
+        """
+        now = time.time()
+        if now - self._last_check_time < MIN_CHECK_INTERVAL:
+            logger.info("距上次检查不足 %ds，跳过（去抖）", MIN_CHECK_INTERVAL)
+            return False
+        self._last_check_time = now
+
         self._check_thread = UpdateCheckThread()
         self._check_thread.finished.connect(self._on_check_finished)
         self._check_thread.start()
+        return True
 
     @pyqtSlot(bool, str, str, object)
     def _on_check_finished(
@@ -297,22 +373,14 @@ class Updater(QObject):
 
         必须先调用 check_for_updates 且 update_available 已触发。
         """
-        # 重新查询最新 release 的下载 URL
-        # 因为 UpdateCheckThread 已经完成，这里直接使用 API 查询 URL
+        # 通过 API 获取下载 URL
         self._start_download_internal()
 
     def _start_download_internal(self) -> None:
         """内部：通过 API 获取下载 URL 并开始下载"""
         try:
-            req = urllib.request.Request(
-                GITHUB_API_URL,
-                headers={
-                    "Accept": "application/vnd.github+json",
-                    "User-Agent": "FastDivider-Updater/1.0",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+            raw = _http_get(GITHUB_API_URL, timeout=15)
+            data = json.loads(raw.decode("utf-8"))
 
             assets = data.get("assets", [])
             download_url = ""
@@ -345,7 +413,7 @@ class Updater(QObject):
             self.download_complete.emit()
             self.update_ready.emit(result)
         else:
-            self.error_occurred.emit(f"下载失败: {result}")
+            self.error_occurred.emit(result)
 
     def apply_update_and_restart(self) -> None:
         """应用更新：生成替换脚本并退出当前进程
