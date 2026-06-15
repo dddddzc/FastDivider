@@ -306,17 +306,17 @@ class SettingsDialog(QDialog):
         self._position_combo.setFixedWidth(200)
         form.addRow("结果显示位置:", self._position_combo)
 
-        self._duration_combo = QComboBox()
-        for d in [0.5, 1, 2, 3, 5]:
-            self._duration_combo.addItem(f"{d} 秒", d)
-        self._duration_combo.setFixedWidth(200)
-        form.addRow("结果显示时长:", self._duration_combo)
-
         self._toast_duration_combo = QComboBox()
         for d in [0.5, 1, 2, 3, 5]:
             self._toast_duration_combo.addItem(f"{d} 秒", d)
         self._toast_duration_combo.setFixedWidth(200)
         form.addRow("提示显示时长:", self._toast_duration_combo)
+
+        self._duration_combo = QComboBox()
+        for d in [0.5, 1, 2, 3, 5]:
+            self._duration_combo.addItem(f"{d} 秒", d)
+        self._duration_combo.setFixedWidth(200)
+        form.addRow("结果显示时长:", self._duration_combo)
 
         self._pin_mode_check = QCheckBox("计算结果长期悬浮（可手动关闭）")
         form.addRow(self._pin_mode_check)
@@ -384,6 +384,8 @@ class SettingsDialog(QDialog):
         #cancelBtn { color: #888; }
         QComboBox, QSpinBox { font-family: "Segoe UI"; font-size: 13px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; color: #555; }
         QComboBox:focus, QSpinBox:focus { border-color: #4682C8; }
+        QSpinBox::up-button, QSpinBox::down-button { subcontrol-origin: border; width: 16px; border: none; background: transparent; cursor: pointer; }
+        QSpinBox::up-arrow, QSpinBox::down-arrow { width: 8px; height: 8px; }
         QCheckBox { font-family: "Segoe UI"; font-size: 13px; spacing: 6px; color: #555; }
         QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; border: 1px solid #ccc; background-color: #fff; }
         QCheckBox::indicator:checked { background-color: #4682C8; border-color: #4682C8; }
@@ -412,6 +414,8 @@ class SettingsDialog(QDialog):
         #cancelBtn { color: #888; }
         QComboBox, QSpinBox { font-family: "Segoe UI"; font-size: 13px; padding: 4px 8px; border: 1px solid #555; border-radius: 4px; background-color: #40404a; color: #ccc; }
         QComboBox:focus, QSpinBox:focus { border-color: #4682C8; }
+        QSpinBox::up-button, QSpinBox::down-button { subcontrol-origin: border; width: 16px; border: none; background: transparent; cursor: pointer; }
+        QSpinBox::up-arrow, QSpinBox::down-arrow { width: 8px; height: 8px; }
         QCheckBox { font-family: "Segoe UI"; font-size: 13px; spacing: 6px; color: #ccc; }
         QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; border: 1px solid #555; background-color: #40404a; }
         QCheckBox::indicator:checked { background-color: #4682C8; border-color: #4682C8; }
