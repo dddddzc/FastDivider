@@ -102,7 +102,7 @@ class ToastWindow(QWidget):
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
 
-        # 顶部栏：关闭按钮（左上角） + 弹簧
+        # 顶部栏：弹簧 + 关闭按钮（右上角）
         top_bar = QHBoxLayout()
         top_bar.setContentsMargins(6, 4, 6, 0)
         top_bar.setSpacing(0)
@@ -120,8 +120,8 @@ class ToastWindow(QWidget):
         close_font.setWeight(QFont.Weight.Bold)
         self._close_btn.setFont(close_font)
 
-        top_bar.addWidget(self._close_btn)
         top_bar.addStretch()
+        top_bar.addWidget(self._close_btn)
 
         outer_layout.addLayout(top_bar)
 
@@ -169,8 +169,8 @@ class ToastWindow(QWidget):
         self._label.setText(text)
 
         # 判断是否进入悬浮模式：
-        # 仅在 pin_mode 开启 且 is_result=True 时悬浮
-        self._is_pinned = self._pin_mode and is_result and not is_error
+        # pin_mode 开启且非错误提示时悬浮
+        self._is_pinned = self._pin_mode and not is_error
 
         # 根据主题和是否错误选择颜色
         if is_error:
@@ -192,8 +192,8 @@ class ToastWindow(QWidget):
             f"padding: 4px;"
         )
 
-        # Show close button for result toasts (always), hide for regular toasts
-        if is_result and not is_error:
+        # Show close button for all non-error toasts, hide for error toasts
+        if not is_error:
             self._close_btn.show()
             self._close_btn.setStyleSheet(
                 f"color: {self._text_color.name()};"

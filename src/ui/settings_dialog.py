@@ -319,7 +319,7 @@ class SettingsDialog(QDialog):
         self._duration_combo.setFixedWidth(200)
         form.addRow("结果显示时长:", self._duration_combo)
 
-        self._pin_mode_check = QCheckBox("计算结果长期悬浮（可手动关闭）")
+        self._pin_mode_check = QCheckBox("提示框和结果框长期悬浮（可手动关闭或拖动）")
         form.addRow(self._pin_mode_check)
 
         self._decimal_spin = QSpinBox()
