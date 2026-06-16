@@ -66,7 +66,7 @@ FastDivider/
 | theme | string | "light" | 主题（light/dark） |
 | history_max | int | 100 | 最大历史记录条数 |
 
-快捷键格式：`f8`、`ctrl+shift`、`ctrl+alt+d`、`shift+f1` 等
+快捷键格式：`ctrl+shift`、`ctrl+alt+d`、`shift+f1` 等
 
 ## 构建与运行
 

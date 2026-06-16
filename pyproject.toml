@@ -1,6 +1,6 @@
 [project]
 name = "FastDivider"
-version = "1.0.3"
+version = "1.0.4"
 description = "极速除法助手 - 选中数字按快捷键即可计算除法，轻量级 Windows 桌面工具"
 requires-python = ">=3.10"
 dependencies = [

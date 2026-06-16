@@ -69,10 +69,14 @@ class ToastWindow(QWidget):
 
         self._init_ui()
 
-        # 监听屏幕配置变化（显示器插拔），自动重新定位悬浮窗口
+        # Listen for screen configuration changes (monitor plug/unplug).
+        # primaryScreenChanged only fires when the PRIMARY screen changes;
+        # for non-primary monitors we must also listen to screenAdded/screenRemoved.
         try:
             from PyQt6.QtGui import QGuiApplication
             QGuiApplication.primaryScreenChanged.connect(self._on_screen_config_changed)
+            QGuiApplication.screenAdded.connect(self._on_screen_config_changed)
+            QGuiApplication.screenRemoved.connect(self._on_screen_config_changed)
         except Exception:
             pass
 

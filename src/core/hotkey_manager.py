@@ -10,7 +10,7 @@
 - 50ms 轮询间隔，响应速度足够快（人类按键持续 100-200ms）
 - 无 Windows 钩子竞争或消息泵问题
 - 精确匹配：仅当目标组合键按下且无多余修饰键时触发，
-  避免 f8 在 shift+f8 时误触发
+  避免 ctrl+shift 在 ctrl+shift+d 时误触发
 - 纯修饰键热键支持：如 ctrl+alt 作为热键时，禁止任何非修饰键同时按下，
   避免用户做 ctrl+alt+X 操作时误触发
 
@@ -48,7 +48,7 @@ VK_NAMES = {
     # 导致纯修饰键热键（ctrl+shift）永远无法匹配（误触发检查检测到虚假按键），
     # 同时录制时也会将虚假按键累积到结果中。
     0x70: "f1", 0x71: "f2", 0x72: "f3", 0x73: "f4",
-    0x74: "f5", 0x75: "f6", 0x76: "f7", 0x77: "f8",
+    0x74: "f5", 0x75: "f6", 0x76: "f7",
     0x78: "f9", 0x79: "f10", 0x7A: "f11", 0x7B: "f12",
     # 数字键
     0x30: "0", 0x31: "1", 0x32: "2", 0x33: "3", 0x34: "4",
@@ -168,13 +168,13 @@ def _is_modifier_family_pressed(vk: int) -> bool:
 def parse_hotkey_string(hotkey_str: str) -> set[int]:
     """将快捷键字符串解析为虚拟键码集合
 
-    支持格式："f8", "shift+f8", "ctrl+alt+d", "ctrl+shift+f1"
+    支持格式："ctrl+shift", "ctrl+shift+d", "ctrl+alt+d", "ctrl+shift+f1"
 
     Args:
         hotkey_str: 快捷键字符串
 
     Returns:
-        虚拟键码集合，如 {0x10, 0x77} 表示 shift+f8
+        虚拟键码集合，如 {0x10, 0x11} 表示 ctrl+shift
     """
     vks: set[int] = set()
     parts = hotkey_str.lower().replace(" ", "").split("+")
@@ -194,13 +194,13 @@ def vk_set_to_string(vks: set[int]) -> str:
     """将虚拟键码集合转换为快捷键字符串
 
     输出顺序：ctrl > alt > shift > win > 普通键（按 VK 升序）。
-    例如 {alt, ctrl} → "ctrl+alt"，{shift, ctrl, f8} → "ctrl+shift+f8"。
+    例如 {alt, ctrl} → "ctrl+alt"，{shift, ctrl, vk_d} → "ctrl+shift+d"。
 
     Args:
         vks: 虚拟键码集合
 
     Returns:
-        快捷键字符串，如 "ctrl+shift+f8"
+        快捷键字符串，如 "ctrl+shift+d"
     """
     modifier_order = [0x11, 0x12, 0x10, 0x5B, 0x5C]  # ctrl, alt, shift, win, win_right
     mods: list[str] = []
@@ -238,7 +238,7 @@ class HotkeyManager(QObject):
     - 组合键从「激活」→「释放」时触发回调
     - 确保回调执行时热键的所有修饰键已释放，
       避免修饰键与 Ctrl+C 模拟按键叠加导致复制失败
-    - 精确匹配：不允许多余修饰键，f8 不会在 shift+f8 时误触发
+    - 精确匹配：不允许多余修饰键，ctrl+shift 不会在 ctrl+shift+d 时误触发
     """
 
     # 按键录制完成信号（可选使用，也可通过 is_recording_done() 轮询）
@@ -326,12 +326,12 @@ class HotkeyManager(QObject):
 
         采用「家族集」语义：
         - target_vks 中的修饰键（如 0x11=ctrl）匹配整个家族 {0x11, 0xA2, 0xA3} 任一被按下
-        - 普通键（如 0x77=f8）按精确 VK 检查
+        - 普通键（如 0x44=D）按精确 VK 检查
 
         要求：
         1. 目标组合中的所有键（家族集）都被按下
         2. 没有多余的修饰键家族被按下
-           （避免 f8 在 shift+f8 时误触发）
+           （避免 ctrl+shift 在 ctrl+shift+d 时误触发）
         3. 若热键为纯修饰键组合（如 ctrl+alt），还需禁止任何已知非修饰键被按下，
            避免用户做 ctrl+alt+X 时误触发
         """
