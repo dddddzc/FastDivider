@@ -417,7 +417,7 @@ class FastDividerApp(QObject):
             f"<p>{error_msg}</p>"
             f"<p><b>您可以手动下载最新版本：</b><br>"
             f"<a href='{releases_url}'>{releases_url}</a>"
-            f"&nbsp;&nbsp;<i>（Ctrl+单击 打开链接）</i></p>"
+            f"&nbsp;&nbsp;<i>（点击打开）</i></p>"
             f"<hr>"
             f"<p><b>手动更新步骤：</b></p>"
             f"<ol>"

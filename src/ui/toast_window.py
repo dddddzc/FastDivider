@@ -92,25 +92,17 @@ class ToastWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
-        # 主布局
-        main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(20, 14, 8, 14)
-        main_layout.setSpacing(8)
+        # 外层垂直布局
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
 
-        # 文本标签
-        self._label = QLabel()
-        self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._label.setMinimumWidth(TOAST_MIN_WIDTH)
+        # 顶部栏：关闭按钮（左上角） + 弹簧
+        top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(6, 4, 6, 0)
+        top_bar.setSpacing(0)
 
-        font = QFont()
-        font.setFamily("Segoe UI")
-        font.setPointSize(14)
-        font.setWeight(QFont.Weight.Medium)
-        self._label.setFont(font)
-
-        main_layout.addWidget(self._label, stretch=1)
-
-        # 关闭按钮（悬浮模式时显示）
+        # 关闭按钮（结果 Toast 左上角显示，普通提示隐藏）
         self._close_btn = QPushButton("×")
         self._close_btn.setFixedSize(PIN_CLOSE_BTN_SIZE, PIN_CLOSE_BTN_SIZE)
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -123,7 +115,23 @@ class ToastWindow(QWidget):
         close_font.setWeight(QFont.Weight.Bold)
         self._close_btn.setFont(close_font)
 
-        main_layout.addWidget(self._close_btn)
+        top_bar.addWidget(self._close_btn)
+        top_bar.addStretch()
+
+        outer_layout.addLayout(top_bar)
+
+        # 文本标签
+        self._label = QLabel()
+        self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._label.setMinimumWidth(TOAST_MIN_WIDTH)
+
+        font = QFont()
+        font.setFamily("Segoe UI")
+        font.setPointSize(14)
+        font.setWeight(QFont.Weight.Medium)
+        self._label.setFont(font)
+
+        outer_layout.addWidget(self._label)
 
         # 定时器连接
         self._fade_timer.timeout.connect(self._fade_out)
@@ -179,8 +187,8 @@ class ToastWindow(QWidget):
             f"padding: 4px;"
         )
 
-        # 悬浮模式：显示关闭按钮，不设置定时消失
-        if self._is_pinned:
+        # Show close button for result toasts (always), hide for regular toasts
+        if is_result and not is_error:
             self._close_btn.show()
             self._close_btn.setStyleSheet(
                 f"color: {self._text_color.name()};"
@@ -189,7 +197,9 @@ class ToastWindow(QWidget):
                 f"padding: 0;"
                 f"margin: 0;"
             )
-            self._fade_timer.stop()
+            # In pin mode, disable auto-dismiss timer
+            if self._is_pinned:
+                self._fade_timer.stop()
         else:
             self._close_btn.hide()
 

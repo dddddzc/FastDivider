@@ -384,10 +384,13 @@ class Updater(QObject):
         """应用更新：生成替换脚本并退出当前进程
 
         替换脚本流程：
-        1. 等待当前进程退出（最多 30 秒）
-        2. 用新 EXE 覆盖旧 EXE
-        3. 启动新 EXE
-        4. 删除临时文件和脚本自身
+        1. 等待当前进程退出（最多 30 秒，带超时保护）
+        2. 额外等待 2 秒确保文件句柄完全释放
+        3. 用新 EXE 覆盖旧 EXE
+        4. 验证替换成功（检查文件存在且大小 > 0）
+        5. 等待 1 秒让磁盘缓存刷新
+        6. 启动新 EXE
+        7. 清理临时文件和脚本自身
         """
         old_exe = self.get_current_exe_path()
         new_exe = self._temp_exe_path
@@ -404,14 +407,24 @@ class Updater(QObject):
         # 生成替换批处理脚本
         bat_path = os.path.join(tempfile.gettempdir(), f"{APP_NAME}_update.bat")
         bat_content = f'''@echo off
+setlocal enabledelayedexpansion
 chcp 65001 >nul
 echo {APP_NAME} 正在更新...
 
+:: Wait for old process to exit (max 30 retries, 1s each)
+set RETRY=0
 :wait_exit
 timeout /t 1 /nobreak >nul
 tasklist /FI "IMAGENAME eq {APP_EXE_NAME}" 2>NUL | find /I "{APP_EXE_NAME}" >NUL
-if "%ERRORLEVEL%"=="0" goto wait_exit
+if "%ERRORLEVEL%"=="0" (
+    set /a RETRY+=1
+    if !RETRY! LSS 30 goto wait_exit
+)
 
+:: Extra delay to ensure file handles are fully released by the OS
+timeout /t 2 /nobreak >nul
+
+:: Replace old EXE with new one
 echo 正在替换文件...
 copy /Y "{new_exe}" "{old_exe}"
 if %ERRORLEVEL% neq 0 (
@@ -421,9 +434,25 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
+:: Verify the copy succeeded (file exists and has non-zero size)
+if not exist "{old_exe}" (
+    echo 替换失败：目标文件不存在！
+    pause
+    exit /b 1
+)
+for %%F in ("{old_exe}") do if %%~zF EQU 0 (
+    echo 替换失败：目标文件大小为 0！
+    pause
+    exit /b 1
+)
+
+:: Wait for disk write cache to flush
+timeout /t 1 /nobreak >nul
+
 echo 更新完成，正在启动...
 start "" "{old_exe}"
 
+:: Clean up temp files
 del "{new_exe}" 2>nul
 del "%~f0" 2>nul
 '''
@@ -436,18 +465,28 @@ del "%~f0" 2>nul
             logger.error("生成替换脚本失败: %s", e)
             return
 
-        # 启动替换脚本（使用 CREATE_NEW_PROCESS_GROUP 让批处理独立运行）
+        # Launch the replacement script completely detached from this process.
+        # DETACHED_PROCESS ensures the batch script has no console attachment to
+        # the parent, and CREATE_NEW_PROCESS_GROUP isolates it in a new process
+        # group so the parent's QApplication.quit() does not affect it.
         import subprocess
+        DETACHED_PROCESS = 0x00000008
+        CREATE_NEW_PROCESS_GROUP = 0x00000200
         try:
             subprocess.Popen(
                 ["cmd.exe", "/c", bat_path],
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-                close_fds=True,
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
             )
             logger.info("替换脚本已启动，退出当前进程")
         except Exception as e:
             logger.error("启动替换脚本失败: %s", e)
             return
+
+        # Flush all pending I/O before quitting
+        time.sleep(0.1)
 
         # 退出当前应用
         from PyQt6.QtWidgets import QApplication

@@ -164,7 +164,7 @@ class UpdateDialog(QDialog):
     def _show_manual_download_guide(self) -> None:
         """显示手动下载指引弹窗
 
-        包含 GitHub Releases 链接（可 Ctrl+单击 打开）和手动更新步骤。
+        包含 GitHub Releases 链接和手动更新步骤。
         """
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("手动更新指引")
@@ -174,7 +174,7 @@ class UpdateDialog(QDialog):
             f"<p>自动下载失败，您可以手动下载最新版本：</p>"
             f"<p><b>下载地址：</b><br>"
             f"<a href='{GITHUB_RELEASES_URL}'>{GITHUB_RELEASES_URL}</a>"
-            f"&nbsp;&nbsp;<i>（Ctrl+单击 打开链接）</i></p>"
+            f"&nbsp;&nbsp;<i>（点击打开）</i></p>"
             f"<hr>"
             f"<p><b>手动更新步骤：</b></p>"
             f"<ol>"
