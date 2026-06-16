@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 from src.core.history import HistoryManager
+from src.version import APP_NAME, APP_HISTORY_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class HistoryDialog(QDialog):
         super().__init__()
         self._history = history_manager
 
-        self.setWindowTitle("FastDivider 历史记录")
+        self.setWindowTitle(f"{APP_NAME} 历史记录")
         self.setFixedSize(500, 600)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
@@ -138,7 +139,7 @@ class HistoryDialog(QDialog):
         path, _ = QFileDialog.getSaveFileName(
             self,
             "导出历史记录",
-            "FastDivider_history.txt",
+            APP_HISTORY_NAME,
             "文本文件 (*.txt)",
         )
         if path:

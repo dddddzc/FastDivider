@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize, QTimer
 
 from src.core.config import ConfigManager
+from src.version import APP_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ class SettingsDialog(QDialog):
         self._config = config
         self._hotkey_manager = hotkey_manager
 
-        self.setWindowTitle("FastDivider 设置")
+        self.setWindowTitle(f"{APP_NAME} 设置")
         self.setMinimumSize(520, 400)
         self.setMaximumSize(600, 500)
         self.setWindowFlags(
@@ -162,7 +163,7 @@ class SettingsDialog(QDialog):
 
         from PyQt6.QtGui import QFont
 
-        title_label = QLabel("FastDivider")
+        title_label = QLabel(APP_NAME)
         title_font = QFont()
         title_font.setFamily("Segoe UI")
         title_font.setPointSize(11)

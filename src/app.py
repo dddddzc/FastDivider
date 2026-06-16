@@ -27,7 +27,12 @@ from src.core.number_parser import parse_number, format_division, format_number_
 from src.core.clipboard_reader import ClipboardReader
 from src.core.hotkey_manager import HotkeyManager
 from src.core.history import HistoryManager
-from src.core.updater import Updater, get_current_version
+from src.core.updater import Updater
+from src.version import (
+    APP_NAME, APP_DISPLAY_NAME, APP_EXE_NAME, APP_DESCRIPTION_FULL,
+    GITHUB_RELEASES_URL, REGISTRY_RUN_KEY, REGISTRY_VALUE_NAME,
+    get_version, get_zip_asset_name,
+)
 from src.ui.toast_window import ToastWindow
 from src.ui.tray_icon import TrayIcon
 from src.ui.update_dialog import UpdateDialog
@@ -130,20 +135,19 @@ class FastDividerApp(QObject):
         except Exception as e:
             logger.error("快捷键注册失败，应用将继续运行但热键功能不可用: %s", e)
             QMessageBox.warning(
-                None, "FastDivider",
+                None, APP_NAME,
                 "快捷键注册失败\n\n请尝试以管理员身份运行本程序。",
             )
 
-        # 显示启动提示
         self._toast.show_toast(
-            "FastDivider 已启动",
+            f"{APP_NAME} 已启动",
             duration_ms=2000,
         )
 
         # 启动时自动检查更新（静默模式）
         self._check_update_silent()
 
-        logger.info("FastDivider 应用已启动，等待第一个数字...")
+        logger.info("%s 应用已启动，等待第一个数字...", APP_NAME)
 
     def _get_icon_path(self) -> Path:
         """获取图标文件路径"""
@@ -259,11 +263,11 @@ class FastDividerApp(QObject):
         self._first_number = None
         logger.info("计算状态已重置")
 
-        QMessageBox.information(None, "FastDivider", "计算状态已重置")
+        QMessageBox.information(None, APP_NAME, "计算状态已重置")
 
     def _show_error(self, message: str) -> None:
         """显示错误提示弹窗"""
-        QMessageBox.warning(None, "FastDivider", message)
+        QMessageBox.warning(None, APP_NAME, message)
 
     # --- 对话框操作 ---
     def _show_settings(self) -> None:
@@ -313,7 +317,7 @@ class FastDividerApp(QObject):
         """管理 Windows 注册表开机启动项"""
         try:
             import winreg
-            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            key_path = REGISTRY_RUN_KEY
             key = winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
                 key_path,
@@ -325,13 +329,13 @@ class FastDividerApp(QObject):
                 import sys
                 exe_path = sys.executable if hasattr(sys, '_MEIPASS') else ""
                 if exe_path:
-                    winreg.SetValueEx(key, "FastDivider", 0, winreg.REG_SZ, exe_path)
+                    winreg.SetValueEx(key, REGISTRY_VALUE_NAME, 0, winreg.REG_SZ, exe_path)
                     logger.info("开机启动已启用")
                 else:
                     logger.warning("无法确定 EXE 路径，开机启动设置失败")
             else:
                 try:
-                    winreg.DeleteValue(key, "FastDivider")
+                    winreg.DeleteValue(key, REGISTRY_VALUE_NAME)
                     logger.info("开机启动已禁用")
                 except FileNotFoundError:
                     pass
@@ -353,7 +357,7 @@ class FastDividerApp(QObject):
         self._update_check_silent = False
         if not self._updater.check_for_updates():
             QMessageBox.information(
-                None, "FastDivider",
+                None, APP_NAME,
                 "请稍后再试（距离上次检查时间太近）",
             )
 
@@ -393,7 +397,7 @@ class FastDividerApp(QObject):
         """已是最新版本（静默模式不提示）"""
         logger.info("已是最新版本")
         if not self._update_check_silent:
-            QMessageBox.information(None, "FastDivider", "已是最新版本 ✓")
+            QMessageBox.information(None, APP_NAME, "已是最新版本 ✓")
 
     def _on_update_error(self, error_msg: str) -> None:
         """更新检查出错（静默模式不提示）"""
@@ -403,7 +407,7 @@ class FastDividerApp(QObject):
 
     def _show_update_error_with_guide(self, error_msg: str) -> None:
         """显示更新错误弹窗，并附带手动下载指引"""
-        releases_url = "https://github.com/dddddzc/FastDivider/releases"
+        releases_url = GITHUB_RELEASES_URL
 
         msg_box = QMessageBox()
         msg_box.setWindowTitle("更新失败")
@@ -417,10 +421,10 @@ class FastDividerApp(QObject):
             f"<hr>"
             f"<p><b>手动更新步骤：</b></p>"
             f"<ol>"
-            f"<li>在 Releases 页面下载最新版本的 <code>FastDivider-vX.X.X.zip</code></li>"
+            f"<li>在 Releases 页面下载最新版本的 <code>{get_zip_asset_name()}</code></li>"
             f"<li>解压 ZIP 文件</li>"
-            f"<li>退出当前运行的 FastDivider（右键托盘图标 → 退出）</li>"
-            f"<li>用解压出的 <code>FastDivider.exe</code> 替换旧版本文件</li>"
+            f"<li>退出当前运行的 {APP_NAME}（右键托盘图标 → 退出）</li>"
+            f"<li>用解压出的 <code>{APP_EXE_NAME}</code> 替换旧版本文件</li>"
             f"<li>启动新版本即可</li>"
             f"</ol>"
         )
@@ -432,18 +436,18 @@ class FastDividerApp(QObject):
 
     def _show_about(self) -> None:
         """显示关于对话框"""
-        version = get_current_version()
+        version = get_version()
         QMessageBox.about(
             None,
-            "关于 FastDivider",
-            f"FastDivider 极速除法助手 v{version}\n\n"
+            f"关于 {APP_NAME}",
+            f"{APP_DISPLAY_NAME} 极速除法助手 v{version}\n\n"
             "连续选中数字进行快速除法计算。\n\n"
             "轻量、高效、开箱即用。",
         )
 
     def _quit(self) -> None:
         """退出应用"""
-        logger.info("FastDivider 正在退出...")
+        logger.info("%s 正在退出...", APP_NAME)
         self._hotkey_manager.stop()
         self._tray.hide()
         self._app.quit()

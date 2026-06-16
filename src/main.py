@@ -20,17 +20,22 @@ import ctypes
 import ctypes.wintypes
 from pathlib import Path
 
+from src.version import (
+    APP_NAME, APP_MUTEX_NAME, APP_DIR_NAME, APP_LOG_NAME,
+    APP_CRASH_LOG_NAME, get_version,
+)
+
 # 日志目录（在任何 import 之前确定）
-LOG_DIR = Path.home() / "AppData" / "Roaming" / "FastDivider"
+LOG_DIR = Path.home() / "AppData" / "Roaming" / APP_DIR_NAME
 LOG_DIR.mkdir(parents=True, exist_ok=True)
-CRASH_LOG = LOG_DIR / "crash.log"
+CRASH_LOG = LOG_DIR / APP_CRASH_LOG_NAME
 
 # ── 单实例守护（Named Mutex） ──
 # 使用 Windows Named Mutex 防止同时运行多个 FastDivider 实例。
 # Mutex 由 OS 管理生命周期：进程正常退出或崩溃时自动释放，无残留问题。
 
 ERROR_ALREADY_EXISTS = 0x000000B7
-MUTEX_NAME = "Global\\FastDivider_SingleInstance_Mutex"
+MUTEX_NAME = APP_MUTEX_NAME
 
 kernel32 = ctypes.windll.kernel32
 kernel32.CreateMutexW.argtypes = [
@@ -63,8 +68,8 @@ class SingleInstanceGuard:
             cls._handle = None
             ctypes.windll.user32.MessageBoxW(
                 0,
-                "FastDivider 已在运行中，不能重复启动。",
-                "FastDivider",
+                f"{APP_NAME} 已在运行中，不能重复启动。",
+                APP_NAME,
                 0x40,  # MB_ICONINFORMATION
             )
             sys.exit(0)
@@ -110,8 +115,8 @@ def write_crash_log(exc_type, exc_value, exc_tb) -> None:
     try:
         ctypes.windll.user32.MessageBoxW(
             0,
-            f"FastDivider 崩溃了！\n\n错误信息：{str(exc_value)}\n\n崩溃日志已保存至：\n{CRASH_LOG}",
-            "FastDivider - 崩溃",
+            f"{APP_NAME} 崩溃了！\n\n错误信息：{str(exc_value)}\n\n崩溃日志已保存至：\n{CRASH_LOG}",
+            f"{APP_NAME} - 崩溃",
             0x10,  # MB_ICONERROR
         )
     except Exception:
@@ -124,7 +129,7 @@ sys.excepthook = write_crash_log
 
 def setup_logging() -> None:
     """配置日志系统"""
-    log_file = LOG_DIR / "fastdivider.log"
+    log_file = LOG_DIR / APP_LOG_NAME
 
     logging.basicConfig(
         level=logging.INFO,
@@ -150,8 +155,8 @@ def main() -> None:
             sys.path.insert(0, project_root)
 
     setup_logging()
-    logger = logging.getLogger("FastDivider")
-    logger.info("=== FastDivider 启动 ===")
+    logger = logging.getLogger(APP_NAME)
+    logger.info("=== %s 启动 ===", APP_NAME)
     logger.info("Python: %s", sys.version)
     logger.info("sys.executable: %s", sys.executable)
     logger.info("_MEIPASS: %s", getattr(sys, '_MEIPASS', '(开发环境)'))
@@ -166,14 +171,14 @@ def main() -> None:
         ctypes.windll.user32.MessageBoxW(
             0,
             f"Qt 初始化失败：{e}\n\n可能原因：缺少 Qt 平台插件。\n请检查 PyQt6 是否正确安装。",
-            "FastDivider - 启动失败",
+            f"{APP_NAME} - 启动失败",
             0x10,
         )
         sys.exit(1)
 
     app.setQuitOnLastWindowClosed(False)
-    app.setApplicationName("FastDivider")
-    app.setApplicationVersion("1.0")
+    app.setApplicationName(APP_NAME)
+    app.setApplicationVersion(get_version())
 
     # 创建隐藏锚点窗口：确保 GUI 子系统进程拥有真实顶层窗口句柄
     # --windowed 打包时没有控制台窗口，也没有可见的顶层窗口（Toast 是 Tool 窗口），
@@ -226,7 +231,7 @@ def main() -> None:
         ctypes.windll.user32.MessageBoxW(
             0,
             f"应用启动失败：{e}\n\n崩溃日志：{CRASH_LOG}",
-            "FastDivider - 启动失败",
+            f"{APP_NAME} - 启动失败",
             0x10,
         )
         sys.exit(1)
@@ -240,7 +245,7 @@ def main() -> None:
         logger.critical("事件循环异常: %s", e, exc_info=True)
         exit_code = 1
 
-    logger.info("FastDivider 正常退出，代码: %d", exit_code)
+    logger.info("%s 正常退出，代码: %d", APP_NAME, exit_code)
     sys.exit(exit_code)
 
 

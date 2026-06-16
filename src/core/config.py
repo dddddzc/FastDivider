@@ -10,6 +10,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from src.version import APP_DIR_NAME, APP_CONFIG_NAME
+
 logger = logging.getLogger(__name__)
 
 # 默认配置
@@ -28,7 +30,7 @@ DEFAULT_CONFIG = {
 # 配置文件路径
 def _get_config_dir() -> Path:
     """获取配置文件目录路径"""
-    config_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "FastDivider"
+    config_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / APP_DIR_NAME
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
 
@@ -42,7 +44,7 @@ class ConfigManager:
 
     def __init__(self) -> None:
         self._config_dir = _get_config_dir()
-        self._config_path = self._config_dir / "config.json"
+        self._config_path = self._config_dir / APP_CONFIG_NAME
         self._data: dict[str, Any] = {}
         self._load()
 

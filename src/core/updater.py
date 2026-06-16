@@ -26,12 +26,13 @@ from typing import Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal, QThread, pyqtSlot
 
-logger = logging.getLogger(__name__)
+from src.version import (
+    APP_NAME, APP_EXE_NAME, GITHUB_API_URL, GITHUB_ZIP_PREFIX,
+    GITHUB_ZIP_SUFFIX, GITHUB_USER_AGENT,
+    get_version, parse_version, get_zip_asset_name,
+)
 
-# GitHub 仓库信息
-GITHUB_REPO = "dddddzc/FastDivider"
-GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"
+logger = logging.getLogger(__name__)
 
 # 请求去抖：最小检查间隔（秒）
 MIN_CHECK_INTERVAL = 30
@@ -42,47 +43,8 @@ RETRY_BASE_DELAY = 2  # 秒，指数退避：2, 4, 8
 
 
 def get_current_version() -> str:
-    """获取当前运行的版本号
-
-    优先从 pyproject.toml 读取，fallback 到硬编码版本。
-    """
-    # 尝试从 pyproject.toml 读取（开发环境）
-    try:
-        if hasattr(sys, '_MEIPASS'):
-            # 打包后的环境，从内部文件读取
-            pyproject_path = Path(sys._MEIPASS) / "pyproject.toml"
-        else:
-            pyproject_path = Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
-
-        if pyproject_path.exists():
-            content = pyproject_path.read_text(encoding="utf-8")
-            for line in content.splitlines():
-                line = line.strip()
-                if line.startswith("version"):
-                    # 解析 'version = "1.0.0"' 格式
-                    version = line.split("=")[-1].strip().strip('"').strip("'")
-                    if version:
-                        return version
-    except Exception:
-        pass
-
-    # Fallback 硬编码版本
-    return "1.0.0"
-
-
-def parse_version(version_str: str) -> tuple:
-    """将版本号字符串解析为可比较的元组
-
-    "v1.0.0" → (1, 0, 0)
-    "1.0.0"  → (1, 0, 0)
-    """
-    v = version_str.lstrip("v").strip()
-    parts = v.split(".")
-    try:
-        return tuple(int(p) for p in parts)
-    except ValueError:
-        logger.warning("无法解析版本号: %s", version_str)
-        return (0, 0, 0)
+    """获取当前运行的版本号（委托给 version 模块）"""
+    return get_version()
 
 
 def _is_retryable_error(error: Exception) -> bool:
@@ -118,7 +80,7 @@ def _http_get(url: str, timeout: int = 15) -> bytes:
                 url,
                 headers={
                     "Accept": "application/vnd.github+json",
-                    "User-Agent": "FastDivider-Updater/1.0",
+                    "User-Agent": GITHUB_USER_AGENT,
                 },
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -207,16 +169,16 @@ class UpdateCheckThread(QThread):
         # 规范化版本号：去掉 'v' 前缀
         version = tag_name.lstrip("v")
 
-        # 查找 FastDivider zip 包（文件名匹配 FastDivider*.zip）
+        # Find ZIP asset matching the expected pattern
         download_url = ""
         for asset in assets:
             name = asset.get("name", "").lower()
-            if name.startswith("fastdivider") and name.endswith(".zip"):
+            if name.startswith(GITHUB_ZIP_PREFIX) and name.endswith(GITHUB_ZIP_SUFFIX):
                 download_url = asset.get("browser_download_url", "")
                 break
 
         if not download_url:
-            raise Exception("未在 release 中找到 FastDivider ZIP 包")
+            raise Exception(f"未在 release 中找到 {APP_NAME} ZIP 包")
 
         return version, download_url, body
 
@@ -251,8 +213,8 @@ class UpdateDownloadThread(QThread):
     def _download(self) -> str:
         """下载 ZIP 到临时目录，解压提取 EXE，返回 EXE 临时路径"""
         tmp_dir = tempfile.gettempdir()
-        zip_path = os.path.join(tmp_dir, "FastDivider_update.zip")
-        exe_path = os.path.join(tmp_dir, "FastDivider_update.exe")
+        zip_path = os.path.join(tmp_dir, f"{APP_NAME}_update.zip")
+        exe_path = os.path.join(tmp_dir, f"{APP_NAME}_update.exe")
 
         raw = _http_get(self._download_url, timeout=300)
         total_size = len(raw)
@@ -262,20 +224,20 @@ class UpdateDownloadThread(QThread):
 
         logger.info("下载完成: %s (%d bytes)", zip_path, total_size)
 
-        # 从 ZIP 中提取 FastDivider.exe
+        # Extract the EXE from ZIP
         try:
             with zipfile.ZipFile(zip_path, "r") as zf:
                 names = zf.namelist()
                 logger.info("ZIP 内容: %s", names)
-                # 查找 FastDivider.exe（可能在子目录中）
+                # Find the EXE (may be in a subdirectory)
                 exe_name = None
                 for name in names:
-                    if name.lower().endswith("fastdivider.exe"):
+                    if name.lower().endswith(APP_EXE_NAME.lower()):
                         exe_name = name
                         break
 
                 if not exe_name:
-                    raise Exception("ZIP 中未找到 FastDivider.exe")
+                    raise Exception(f"ZIP 中未找到 {APP_EXE_NAME}")
 
                 # 提取到临时目录
                 zf.extract(exe_name, tmp_dir)
@@ -389,12 +351,12 @@ class Updater(QObject):
             download_url = ""
             for asset in assets:
                 name = asset.get("name", "").lower()
-                if name.startswith("fastdivider") and name.endswith(".zip"):
+                if name.startswith(GITHUB_ZIP_PREFIX) and name.endswith(GITHUB_ZIP_SUFFIX):
                     download_url = asset.get("browser_download_url", "")
                     break
 
             if not download_url:
-                self.error_occurred.emit("未在 release 中找到 FastDivider ZIP 包")
+                self.error_occurred.emit(f"未在 release 中找到 {APP_NAME} ZIP 包")
                 return
 
             self._latest_download_url = download_url
@@ -440,14 +402,14 @@ class Updater(QObject):
             return
 
         # 生成替换批处理脚本
-        bat_path = os.path.join(tempfile.gettempdir(), "FastDivider_update.bat")
+        bat_path = os.path.join(tempfile.gettempdir(), f"{APP_NAME}_update.bat")
         bat_content = f'''@echo off
 chcp 65001 >nul
-echo FastDivider 正在更新...
+echo {APP_NAME} 正在更新...
 
 :wait_exit
 timeout /t 1 /nobreak >nul
-tasklist /FI "IMAGENAME eq FastDivider.exe" 2>NUL | find /I "FastDivider.exe" >NUL
+tasklist /FI "IMAGENAME eq {APP_EXE_NAME}" 2>NUL | find /I "{APP_EXE_NAME}" >NUL
 if "%ERRORLEVEL%"=="0" goto wait_exit
 
 echo 正在替换文件...

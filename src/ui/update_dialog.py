@@ -13,10 +13,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSlot
 
-logger = logging.getLogger(__name__)
+from src.version import APP_NAME, APP_EXE_NAME, GITHUB_RELEASES_URL, get_zip_asset_name
 
-# GitHub Releases 页面地址
-GITHUB_RELEASES_URL = "https://github.com/dddddzc/FastDivider/releases"
+logger = logging.getLogger(__name__)
 
 
 class UpdateDialog(QDialog):
@@ -179,10 +178,10 @@ class UpdateDialog(QDialog):
             f"<hr>"
             f"<p><b>手动更新步骤：</b></p>"
             f"<ol>"
-            f"<li>在 Releases 页面下载最新版本的 <code>FastDivider-vX.X.X.zip</code></li>"
+            f"<li>在 Releases 页面下载最新版本的 <code>{get_zip_asset_name()}</code></li>"
             f"<li>解压 ZIP 文件</li>"
-            f"<li>退出当前运行的 FastDivider（右键托盘图标 → 退出）</li>"
-            f"<li>用解压出的 <code>FastDivider.exe</code> 替换旧版本文件</li>"
+            f"<li>退出当前运行的 {APP_NAME}（右键托盘图标 → 退出）</li>"
+            f"<li>用解压出的 <code>{APP_EXE_NAME}</code> 替换旧版本文件</li>"
             f"<li>启动新版本即可</li>"
             f"</ol>"
         )

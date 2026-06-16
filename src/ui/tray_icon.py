@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from src.version import APP_NAME, APP_DESCRIPTION
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,7 +60,7 @@ class TrayIcon(QObject):
                 QApplication.style().StandardPixmap.SP_CommandLink
             )
         self._tray.setIcon(icon)
-        self._tray.setToolTip("FastDivider - 极速除法助手")
+        self._tray.setToolTip(f"{APP_NAME} - {APP_DESCRIPTION}")
 
     def _init_menu(self) -> None:
         """初始化右键菜单"""
