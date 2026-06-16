@@ -16,8 +16,8 @@ import logging
 from typing import Optional
 
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QRect
-from PyQt6.QtGui import QPainter, QColor, QCursor, QFont, QPainterPath, QPaintEvent
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QPoint
+from PyQt6.QtGui import QPainter, QColor, QCursor, QFont, QPainterPath, QPaintEvent, QMouseEvent
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,11 @@ class ToastWindow(QWidget):
         self._fade_timer.setSingleShot(True)
         self._fade_animation: Optional[QPropertyAnimation] = None
         self._is_pinned = False  # 当前 Toast 是否处于悬浮状态
+
+        # Drag support: remember user-dragged position within session
+        self._drag_offset: Optional[QPoint] = None
+        self._is_dragging = False
+        self._user_position: Optional[QPoint] = None  # User-set position, None = use preset
 
         self._init_ui()
 
@@ -215,6 +220,12 @@ class ToastWindow(QWidget):
         # 显示
         self.show()
 
+        # 悬浮模式下显示抓手光标提示可拖动，非悬浮模式恢复默认光标
+        if self._is_pinned:
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+
         # 定时消失（仅非悬浮模式）
         if not self._is_pinned:
             self._fade_timer.stop()
@@ -263,10 +274,18 @@ class ToastWindow(QWidget):
         self.setWindowOpacity(1.0)
 
     def _position_toast(self) -> None:
-        """根据配置定位 Toast 窗口，确保始终在屏幕可见区域内"""
+        """根据配置定位 Toast 窗口，确保始终在屏幕可见区域内
+
+        优先使用用户拖动后的位置（_user_position），
+        否则使用配置的预设位置（bottom_right/center/mouse_near）。
+        """
         geo = self._get_screen_geometry()
 
-        if self._position_mode == "mouse_near":
+        if self._user_position is not None:
+            # Use the position set by user dragging
+            x = self._user_position.x()
+            y = self._user_position.y()
+        elif self._position_mode == "mouse_near":
             pos = QCursor.pos()
             x = pos.x() + 15
             y = pos.y() + 15
@@ -324,6 +343,33 @@ class ToastWindow(QWidget):
         """淡出动画完成回调"""
         self.hide()
         self.setWindowOpacity(1.0)
+
+    # --- 拖动支持 ---
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """记录拖动起始偏移量，开始拖动"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = event.position().toPoint()
+            self._is_dragging = True
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """拖动窗口到新位置"""
+        if self._is_dragging and self._drag_offset is not None:
+            delta = event.position().toPoint() - self._drag_offset
+            new_pos = self.pos() + delta
+            self.move(new_pos)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """拖动结束，保存新位置"""
+        if event.button() == Qt.MouseButton.LeftButton and self._is_dragging:
+            self._is_dragging = False
+            self._drag_offset = None
+            self._user_position = self.pos()
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+            logger.debug("Toast 用户拖动到新位置: (%d, %d)", self._user_position.x(), self._user_position.y())
+        super().mouseReleaseEvent(event)
 
     def paintEvent(self, event: QPaintEvent) -> None:
         """自定义绘制：阴影 + 圆角半透明背景
