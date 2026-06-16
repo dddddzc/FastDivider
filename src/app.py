@@ -19,7 +19,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import QObject, pyqtSignal, Qt
 
 from src.core.config import ConfigManager
@@ -129,10 +129,9 @@ class FastDividerApp(QObject):
             self._hotkey_manager.start()
         except Exception as e:
             logger.error("快捷键注册失败，应用将继续运行但热键功能不可用: %s", e)
-            self._toast.show_toast(
-                "快捷键注册失败 | 请尝试以管理员运行",
-                duration_ms=3000,
-                is_error=True,
+            QMessageBox.warning(
+                None, "FastDivider",
+                "快捷键注册失败\n\n请尝试以管理员身份运行本程序。",
             )
 
         # 显示启动提示
@@ -260,18 +259,11 @@ class FastDividerApp(QObject):
         self._first_number = None
         logger.info("计算状态已重置")
 
-        self._toast.show_toast(
-            "计算状态已重置",
-            duration_ms=int(self._config.get("toast_duration", 1) * 1000),
-        )
+        QMessageBox.information(None, "FastDivider", "计算状态已重置")
 
     def _show_error(self, message: str) -> None:
-        """显示错误提示 Toast"""
-        self._toast.show_toast(
-            message,
-            duration_ms=1500,
-            is_error=True,
-        )
+        """显示错误提示弹窗"""
+        QMessageBox.warning(None, "FastDivider", message)
 
     # --- 对话框操作 ---
     def _show_settings(self) -> None:
@@ -359,10 +351,11 @@ class FastDividerApp(QObject):
         """手动检查更新（始终显示结果）"""
         logger.info("用户手动检查更新...")
         self._update_check_silent = False
-        if self._updater.check_for_updates():
-            self._toast.show_toast("正在检查更新...", duration_ms=2000)
-        else:
-            self._toast.show_toast("请稍后再试（距离上次检查太近）", duration_ms=2000)
+        if not self._updater.check_for_updates():
+            QMessageBox.information(
+                None, "FastDivider",
+                "请稍后再试（距离上次检查时间太近）",
+            )
 
     def _on_update_available(self, current_version: str, latest_version: str) -> None:
         """发现新版本，弹窗确认并展示下载进度"""
@@ -400,21 +393,45 @@ class FastDividerApp(QObject):
         """已是最新版本（静默模式不提示）"""
         logger.info("已是最新版本")
         if not self._update_check_silent:
-            self._toast.show_toast("已是最新版本 ✓", duration_ms=2000)
+            QMessageBox.information(None, "FastDivider", "已是最新版本 ✓")
 
     def _on_update_error(self, error_msg: str) -> None:
         """更新检查出错（静默模式不提示）"""
         logger.error("更新检查出错: %s", error_msg)
         if not self._update_check_silent:
-            self._toast.show_toast(
-                f"检查更新失败: {error_msg}",
-                duration_ms=3000,
-                is_error=True,
-            )
+            self._show_update_error_with_guide(error_msg)
+
+    def _show_update_error_with_guide(self, error_msg: str) -> None:
+        """显示更新错误弹窗，并附带手动下载指引"""
+        releases_url = "https://github.com/dddddzc/FastDivider/releases"
+
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("更新失败")
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+
+        guide_text = (
+            f"<p>{error_msg}</p>"
+            f"<p><b>您可以手动下载最新版本：</b><br>"
+            f"<a href='{releases_url}'>{releases_url}</a>"
+            f"&nbsp;&nbsp;<i>（Ctrl+单击 打开链接）</i></p>"
+            f"<hr>"
+            f"<p><b>手动更新步骤：</b></p>"
+            f"<ol>"
+            f"<li>在 Releases 页面下载最新版本的 <code>FastDivider-vX.X.X.zip</code></li>"
+            f"<li>解压 ZIP 文件</li>"
+            f"<li>退出当前运行的 FastDivider（右键托盘图标 → 退出）</li>"
+            f"<li>用解压出的 <code>FastDivider.exe</code> 替换旧版本文件</li>"
+            f"<li>启动新版本即可</li>"
+            f"</ol>"
+        )
+
+        msg_box.setTextFormat(Qt.TextFormat.RichText)
+        msg_box.setText(guide_text)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.exec()
 
     def _show_about(self) -> None:
         """显示关于对话框"""
-        from PyQt6.QtWidgets import QMessageBox
         version = get_current_version()
         QMessageBox.about(
             None,

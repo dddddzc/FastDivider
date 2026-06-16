@@ -9,11 +9,14 @@ from typing import Optional
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QProgressBar, QPushButton,
+    QProgressBar, QPushButton, QMessageBox,
 )
 from PyQt6.QtCore import Qt, pyqtSlot
 
 logger = logging.getLogger(__name__)
+
+# GitHub Releases 页面地址
+GITHUB_RELEASES_URL = "https://github.com/dddddzc/FastDivider/releases"
 
 
 class UpdateDialog(QDialog):
@@ -155,6 +158,39 @@ class UpdateDialog(QDialog):
         self._cancel_btn.setText("关闭")
         self._cancel_btn.show()
         self.setWindowTitle("更新失败")
+
+        # 弹出手动下载指引
+        self._show_manual_download_guide()
+
+    def _show_manual_download_guide(self) -> None:
+        """显示手动下载指引弹窗
+
+        包含 GitHub Releases 链接（可 Ctrl+单击 打开）和手动更新步骤。
+        """
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("手动更新指引")
+        msg_box.setIcon(QMessageBox.Icon.Information)
+
+        guide_text = (
+            f"<p>自动下载失败，您可以手动下载最新版本：</p>"
+            f"<p><b>下载地址：</b><br>"
+            f"<a href='{GITHUB_RELEASES_URL}'>{GITHUB_RELEASES_URL}</a>"
+            f"&nbsp;&nbsp;<i>（Ctrl+单击 打开链接）</i></p>"
+            f"<hr>"
+            f"<p><b>手动更新步骤：</b></p>"
+            f"<ol>"
+            f"<li>在 Releases 页面下载最新版本的 <code>FastDivider-vX.X.X.zip</code></li>"
+            f"<li>解压 ZIP 文件</li>"
+            f"<li>退出当前运行的 FastDivider（右键托盘图标 → 退出）</li>"
+            f"<li>用解压出的 <code>FastDivider.exe</code> 替换旧版本文件</li>"
+            f"<li>启动新版本即可</li>"
+            f"</ol>"
+        )
+
+        msg_box.setTextFormat(Qt.TextFormat.RichText)
+        msg_box.setText(guide_text)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.exec()
 
     def _on_start_update(self) -> None:
         """用户点击「立即更新」"""
