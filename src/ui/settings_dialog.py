@@ -9,7 +9,7 @@ import logging
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QComboBox, QSpinBox, QCheckBox, QPushButton,
+    QComboBox, QCheckBox, QPushButton,
     QLabel, QListWidget, QListWidgetItem, QStackedWidget,
     QFrame, QWidget, QMessageBox,
 )
@@ -292,7 +292,7 @@ class SettingsDialog(QDialog):
         header.setObjectName("pageHeader")
         layout.addWidget(header)
 
-        desc = QLabel("控制 Toast 的显示位置、持续时间和数值精度。")
+        desc = QLabel("控制提示框的显示位置、持续时间和数值精度。")
         desc.setObjectName("pageDesc")
         desc.setWordWrap(True)
         layout.addWidget(desc)
@@ -305,27 +305,22 @@ class SettingsDialog(QDialog):
         self._position_combo = QComboBox()
         self._position_combo.addItems(list(self.POSITION_OPTIONS.keys()))
         self._position_combo.setFixedWidth(200)
-        form.addRow("结果显示位置:", self._position_combo)
-
-        self._toast_duration_combo = QComboBox()
-        for d in [0.5, 1, 2, 3, 5]:
-            self._toast_duration_combo.addItem(f"{d} 秒", d)
-        self._toast_duration_combo.setFixedWidth(200)
-        form.addRow("提示显示时长:", self._toast_duration_combo)
+        form.addRow("显示位置:", self._position_combo)
 
         self._duration_combo = QComboBox()
         for d in [0.5, 1, 2, 3, 5]:
             self._duration_combo.addItem(f"{d} 秒", d)
         self._duration_combo.setFixedWidth(200)
-        form.addRow("结果显示时长:", self._duration_combo)
+        form.addRow("显示时长:", self._duration_combo)
 
-        self._pin_mode_check = QCheckBox("提示框和结果框长期悬浮（可手动关闭或拖动）")
+        self._decimal_combo = QComboBox()
+        for n in range(0, 10):
+            self._decimal_combo.addItem(str(n), n)
+        self._decimal_combo.setFixedWidth(200)
+        form.addRow("小数位数:", self._decimal_combo)
+
+        self._pin_mode_check = QCheckBox("提示框长期悬浮")
         form.addRow(self._pin_mode_check)
-
-        self._decimal_spin = QSpinBox()
-        self._decimal_spin.setRange(0, 9)
-        self._decimal_spin.setFixedWidth(200)
-        form.addRow("小数位数:", self._decimal_spin)
 
         layout.addLayout(form)
         layout.addStretch()
@@ -357,9 +352,10 @@ class SettingsDialog(QDialog):
         self._theme_combo = QComboBox()
         self._theme_combo.addItems(["浅色", "深色"])
         self._theme_combo.setFixedWidth(200)
-        form.addRow("主题模式:", self._theme_combo)
+        form.addRow("提示框颜色:", self._theme_combo)
 
         layout.addLayout(form)
+
         layout.addStretch()
         self._stacked_widget.addWidget(page)
 
@@ -383,53 +379,17 @@ class SettingsDialog(QDialog):
         #saveBtn:hover { background-color: #3a6fb5; }
         #resetBtn { color: #888; }
         #cancelBtn { color: #888; }
-        QComboBox, QSpinBox { font-family: "Segoe UI"; font-size: 13px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; color: #555; }
-        QComboBox:focus, QSpinBox:focus { border-color: #4682C8; }
-        QSpinBox::up-button, QSpinBox::down-button { subcontrol-origin: border; width: 16px; border: none; background: transparent; cursor: pointer; }
-        QSpinBox::up-arrow, QSpinBox::down-arrow { width: 8px; height: 8px; }
+        QComboBox { font-family: "Segoe UI"; font-size: 13px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; color: #555; }
+        QComboBox:focus { border-color: #4682C8; }
         QCheckBox { font-family: "Segoe UI"; font-size: 13px; spacing: 6px; color: #555; }
         QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; border: 1px solid #ccc; background-color: #fff; }
         QCheckBox::indicator:checked { background-color: #4682C8; border-color: #4682C8; }
         QLabel { font-family: "Segoe UI"; }
     """
 
-    _DARK_STYLE = """
-        QDialog { background-color: #2b2b30; }
-        #navFrame { background-color: #35353a; border: none; }
-        #navList { background-color: #35353a; border: none; outline: none; font-family: "Segoe UI"; font-size: 13px; padding: 0; }
-        #navList::item { padding: 6px 8px; border-radius: 4px; color: #ccc; }
-        #navList::item:selected { background-color: #45454a; color: #eee; font-weight: bold; }
-        #navList::item:hover { background-color: #40404a; }
-        #separator { color: #555; max-width: 1px; }
-        #contentFrame { background-color: #2b2b30; border: none; }
-        #pageHeader { font-family: "Segoe UI"; font-size: 14px; font-weight: bold; color: #e0e0e0; padding-bottom: 4px; }
-        #pageDesc { font-family: "Segoe UI"; font-size: 12px; color: #888; padding-bottom: 2px; }
-        #hintLabel { font-family: "Segoe UI"; font-size: 11px; color: #777; }
-        #verLabel { font-family: "Segoe UI"; font-size: 10px; color: #666; }
-        QPushButton { font-family: "Segoe UI"; font-size: 13px; padding: 6px 12px; border: 1px solid #555; border-radius: 4px; background-color: #40404a; color: #ccc; }
-        QPushButton:hover { background-color: #4a4a50; }
-        QPushButton:disabled { background-color: #35353a; color: #666; border-color: #444; }
-        #saveBtn { background-color: #4682C8; color: #fff; border-color: #4682C8; font-weight: bold; }
-        #saveBtn:hover { background-color: #3a6fb5; }
-        #resetBtn { color: #888; }
-        #cancelBtn { color: #888; }
-        QComboBox, QSpinBox { font-family: "Segoe UI"; font-size: 13px; padding: 4px 8px; border: 1px solid #555; border-radius: 4px; background-color: #40404a; color: #ccc; }
-        QComboBox:focus, QSpinBox:focus { border-color: #4682C8; }
-        QSpinBox::up-button, QSpinBox::down-button { subcontrol-origin: border; width: 16px; border: none; background: transparent; cursor: pointer; }
-        QSpinBox::up-arrow, QSpinBox::down-arrow { width: 8px; height: 8px; }
-        QCheckBox { font-family: "Segoe UI"; font-size: 13px; spacing: 6px; color: #ccc; }
-        QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; border: 1px solid #555; background-color: #40404a; }
-        QCheckBox::indicator:checked { background-color: #4682C8; border-color: #4682C8; }
-        QLabel { font-family: "Segoe UI"; }
-    """
-
     def _apply_style(self) -> None:
-        """根据当前主题应用样式"""
-        theme = self._config.get("theme", "light")
-        if theme == "dark":
-            self.setStyleSheet(self._DARK_STYLE)
-        else:
-            self.setStyleSheet(self._LIGHT_STYLE)
+        """应用样式：设置界面始终使用浅色，不受框体颜色影响"""
+        self.setStyleSheet(self._LIGHT_STYLE)
 
     def _load_values(self) -> None:
         """从配置加载当前值"""
@@ -447,14 +407,12 @@ class SettingsDialog(QDialog):
                 self._duration_combo.setCurrentIndex(i)
                 break
 
-        toast_duration = self._config.get("toast_duration", 1)
-        for i in range(self._toast_duration_combo.count()):
-            if self._toast_duration_combo.itemData(i) == toast_duration:
-                self._toast_duration_combo.setCurrentIndex(i)
+        decimal_val = self._config.get("decimal_places", 2)
+        for i in range(self._decimal_combo.count()):
+            if self._decimal_combo.itemData(i) == decimal_val:
+                self._decimal_combo.setCurrentIndex(i)
                 break
 
-        decimal_val = self._config.get("decimal_places", 2)
-        self._decimal_spin.setValue(decimal_val)
         self._auto_start_check.setChecked(self._config.get("auto_start", False))
         self._pin_mode_check.setChecked(self._config.get("pin_mode", False))
 
@@ -478,8 +436,7 @@ class SettingsDialog(QDialog):
         self._config.set("hotkey", hotkey)
         self._config.set("display_position", self.POSITION_OPTIONS[self._position_combo.currentText()])
         self._config.set("display_duration", self._duration_combo.currentData())
-        self._config.set("toast_duration", self._toast_duration_combo.currentData())
-        self._config.set("decimal_places", self._decimal_spin.value())
+        self._config.set("decimal_places", self._decimal_combo.currentData())
         self._config.set("auto_start", self._auto_start_check.isChecked())
         self._config.set("pin_mode", self._pin_mode_check.isChecked())
         self._config.set("theme", "light" if self._theme_combo.currentIndex() == 0 else "dark")
@@ -488,6 +445,13 @@ class SettingsDialog(QDialog):
 
         if self._hotkey_manager:
             self._hotkey_manager.update_hotkey(hotkey)
+
+        # Notify the user that settings were saved; some take effect on
+        # next launch (e.g. already-shown toasts won't re-skin mid-flight).
+        QMessageBox.information(
+            self, "提示",
+            "设置修改成功！\n部分设置可能需要重启应用才能生效。",
+        )
 
         self.accept()
 

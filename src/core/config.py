@@ -17,13 +17,12 @@ logger = logging.getLogger(__name__)
 # 默认配置
 DEFAULT_CONFIG = {
     "hotkey": "ctrl+shift",         # 默认热键：纯修饰键组合（用户可在设置中修改）
-    "display_duration": 2,          # 结果显示时长（秒）
-    "toast_duration": 1,            # Toast 提示时长（秒）
-    "pin_mode": False,              # 提示框和结果框悬浮模式：长期停留，可手动关闭或拖动
+    "display_duration": 2,          # 显示时长（秒），提示与结果统一使用
+    "pin_mode": False,              # 框体长期悬浮：长期停留，可手动关闭或拖动
     "display_position": "bottom_right",  # bottom_right, center, mouse_near
     "decimal_places": 2,            # 0-9 表示固定位数
     "auto_start": False,
-    "theme": "light",               # light, dark
+    "theme": "light",               # 框体颜色（light/dark），仅影响 Toast
     "history_max": 100,
 }
 

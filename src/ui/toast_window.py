@@ -16,7 +16,7 @@ import logging
 from typing import Optional
 
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QPoint
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QPoint, QSize
 from PyQt6.QtGui import QPainter, QColor, QCursor, QFont, QPainterPath, QPaintEvent, QMouseEvent
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Toast 样式常量
 TOAST_BORDER_RADIUS = 12
 TOAST_MIN_WIDTH = 200
-TOAST_MIN_HEIGHT = 60
+TOAST_MIN_HEIGHT = 56
 TOAST_OPACITY = 0.92
 TOAST_SHADOW_OFFSET = 4
 TOAST_SHADOW_RADIUS = 12
@@ -32,6 +32,9 @@ TOAST_SHADOW_COLOR = QColor(0, 0, 0, 40)
 
 # 悬浮模式下的关闭按钮样式
 PIN_CLOSE_BTN_SIZE = 20
+
+# 边缘拖拽改大小的热区宽度（像素）
+RESIZE_EDGE_MARGIN = 8
 
 
 class ToastWindow(QWidget):
@@ -72,6 +75,13 @@ class ToastWindow(QWidget):
         self._is_dragging = False
         self._user_position: Optional[QPoint] = None  # User-set position, None = use preset
 
+        # Resize-from-edge support: remember user-resized size within session.
+        # None = size by content; once set, persists until app exits.
+        self._user_size: Optional[QSize] = None
+        self._resize_edge: str = ""  # e.g. "right", "bottom-left", "" = not resizing
+        self._resize_start_rect: Optional[QRect] = None
+        self._resize_start_pos: Optional[QPoint] = None
+
         self._init_ui()
 
         # Listen for screen configuration changes (monitor plug/unplug).
@@ -97,36 +107,20 @@ class ToastWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
-        # 外层垂直布局
+        # Track mouse movement (no button pressed) to update the resize
+        # cursor when hovering over the window edges.
+        self.setMouseTracking(True)
+
+        # 外层布局只容纳文本标签。右侧留出关闭按钮宽度（36px），左侧对称
+        # 留白，使文字在可用区视觉居中且不与右上角按钮重叠。关闭按钮是
+        # 绝对定位的子控件，不参与此布局。
         outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setContentsMargins(16, 6, 36, 6)
         outer_layout.setSpacing(0)
 
-        # 顶部栏：弹簧 + 关闭按钮（右上角）
-        top_bar = QHBoxLayout()
-        top_bar.setContentsMargins(6, 4, 6, 0)
-        top_bar.setSpacing(0)
-
-        # 关闭按钮（结果 Toast 左上角显示，普通提示隐藏）
-        self._close_btn = QPushButton("×")
-        self._close_btn.setFixedSize(PIN_CLOSE_BTN_SIZE, PIN_CLOSE_BTN_SIZE)
-        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._close_btn.clicked.connect(self._close_pinned)
-        self._close_btn.hide()  # 默认隐藏
-
-        close_font = QFont()
-        close_font.setFamily("Segoe UI")
-        close_font.setPointSize(12)
-        close_font.setWeight(QFont.Weight.Bold)
-        self._close_btn.setFont(close_font)
-
-        top_bar.addStretch()
-        top_bar.addWidget(self._close_btn)
-
-        outer_layout.addLayout(top_bar)
-
-        # 文本标签
-        self._label = QLabel()
+        # 文本标签占满整个内容区。左右留白：右侧留出关闭按钮宽度，使文字
+        # 在可用区视觉居中且不与右上角关闭按钮重叠。
+        self._label = QLabel(self)
         self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._label.setMinimumWidth(TOAST_MIN_WIDTH)
 
@@ -137,6 +131,20 @@ class ToastWindow(QWidget):
         self._label.setFont(font)
 
         outer_layout.addWidget(self._label)
+
+        # 关闭按钮：绝对定位的子控件，浮于右上角（在 resizeEvent 中定位）。
+        # 不再独占顶部一行，避免文字/按钮各占一行的不协调布局。
+        self._close_btn = QPushButton("×", self)
+        self._close_btn.setFixedSize(PIN_CLOSE_BTN_SIZE, PIN_CLOSE_BTN_SIZE)
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn.clicked.connect(self._close_pinned)
+        self._close_btn.hide()  # 默认隐藏
+
+        close_font = QFont()
+        close_font.setFamily("Segoe UI")
+        close_font.setPointSize(12)
+        close_font.setWeight(QFont.Weight.Bold)
+        self._close_btn.setFont(close_font)
 
         # 定时器连接
         self._fade_timer.timeout.connect(self._fade_out)
@@ -208,11 +216,16 @@ class ToastWindow(QWidget):
         else:
             self._close_btn.hide()
 
-        # 计算尺寸
-        self.adjustSize()
-        min_w = max(self.width(), TOAST_MIN_WIDTH)
-        min_h = max(self.height(), TOAST_MIN_HEIGHT)
-        self.setFixedSize(min_w, min_h)
+        # 计算尺寸：允许后续边缘 resize，故用 setMinimumSize + resize 而非
+        # setFixedSize。若用户本次会话已拖拽改过大小，则沿用记住的大小。
+        self.setMinimumSize(TOAST_MIN_WIDTH, TOAST_MIN_HEIGHT)
+        if self._user_size is not None:
+            self.resize(self._user_size)
+        else:
+            self.adjustSize()
+            min_w = max(self.width(), TOAST_MIN_WIDTH)
+            min_h = max(self.height(), TOAST_MIN_HEIGHT)
+            self.resize(min_w, min_h)
 
         # 定位
         self._position_toast()
@@ -344,32 +357,139 @@ class ToastWindow(QWidget):
         self.hide()
         self.setWindowOpacity(1.0)
 
-    # --- 拖动支持 ---
+    # --- 拖动 / 边缘缩放支持 ---
+    def _edge_at(self, pos: QPoint) -> str:
+        """判断 pos 落在窗口哪个边缘热区，返回方向字符串（空串表示内部）。
+
+        支持 4 边 + 4 角共 8 个方向，例如 "left"、"right"、"top"、"bottom"、
+        "top-left"、"bottom-right" 等。
+        """
+        m = RESIZE_EDGE_MARGIN
+        w, h = self.width(), self.height()
+        left = pos.x() <= m
+        right = pos.x() >= w - m
+        top = pos.y() <= m
+        bottom = pos.y() >= h - m
+
+        parts = []
+        if top:
+            parts.append("top")
+        if bottom:
+            parts.append("bottom")
+        if left:
+            parts.append("left")
+        if right:
+            parts.append("right")
+        return "-".join(parts)
+
+    @staticmethod
+    def _cursor_for_edge(edge: str) -> Qt.CursorShape:
+        """根据边缘方向返回对应的缩放光标"""
+        mapping = {
+            "left": Qt.CursorShape.SizeHorCursor,
+            "right": Qt.CursorShape.SizeHorCursor,
+            "top": Qt.CursorShape.SizeVerCursor,
+            "bottom": Qt.CursorShape.SizeVerCursor,
+            "top-left": Qt.CursorShape.SizeFDiagCursor,
+            "bottom-right": Qt.CursorShape.SizeFDiagCursor,
+            "top-right": Qt.CursorShape.SizeBDiagCursor,
+            "bottom-left": Qt.CursorShape.SizeBDiagCursor,
+        }
+        return mapping.get(edge, Qt.CursorShape.ArrowCursor)
+
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """记录拖动起始偏移量，开始拖动"""
+        """按下左键：若在边缘热区则进入缩放，否则进入拖动移动"""
         if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_offset = event.position().toPoint()
-            self._is_dragging = True
-            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            edge = self._edge_at(event.position().toPoint())
+            if edge:
+                # 开始边缘缩放
+                self._resize_edge = edge
+                self._resize_start_rect = self.geometry()
+                self._resize_start_pos = event.globalPosition().toPoint()
+                self.setCursor(self._cursor_for_edge(edge))
+            else:
+                # 内部按下：拖动移动窗口
+                self._drag_offset = event.position().toPoint()
+                self._is_dragging = True
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        """拖动窗口到新位置"""
-        if self._is_dragging and self._drag_offset is not None:
-            delta = event.position().toPoint() - self._drag_offset
-            new_pos = self.pos() + delta
-            self.move(new_pos)
+        """移动鼠标：缩放模式下调整窗口几何，拖动模式下移动窗口，
+        否则根据是否悬停于边缘更新光标。"""
+        pos = event.position().toPoint()
+
+        if self._resize_edge and self._resize_start_rect is not None \
+                and self._resize_start_pos is not None:
+            # 边缘缩放：按鼠标全局位移调整各边
+            delta = event.globalPosition().toPoint() - self._resize_start_pos
+            rect = QRect(self._resize_start_rect)
+            min_w, min_h = self.minimumWidth(), self.minimumHeight()
+
+            if "right" in self._resize_edge:
+                rect.setRight(max(rect.left() + min_w, rect.right() + delta.x()))
+            if "bottom" in self._resize_edge:
+                rect.setBottom(max(rect.top() + min_h, rect.bottom() + delta.y()))
+            if "left" in self._resize_edge:
+                new_left = min(rect.right() - min_w, rect.left() + delta.x())
+                rect.setLeft(new_left)
+            if "top" in self._resize_edge:
+                new_top = min(rect.bottom() - min_h, rect.top() + delta.y())
+                rect.setTop(new_top)
+
+            self.setGeometry(rect)
+        elif self._is_dragging and self._drag_offset is not None:
+            # 拖动移动
+            delta = pos - self._drag_offset
+            self.move(self.pos() + delta)
+        else:
+            # 未按下：根据边缘热区切换光标
+            edge = self._edge_at(pos)
+            if edge:
+                self.setCursor(self._cursor_for_edge(edge))
+            elif self._is_pinned:
+                self.setCursor(Qt.CursorShape.OpenHandCursor)
+            else:
+                self.setCursor(Qt.CursorShape.ArrowCursor)
+
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        """拖动结束，保存新位置"""
-        if event.button() == Qt.MouseButton.LeftButton and self._is_dragging:
-            self._is_dragging = False
-            self._drag_offset = None
-            self._user_position = self.pos()
-            self.setCursor(Qt.CursorShape.OpenHandCursor)
-            logger.debug("Toast 用户拖动到新位置: (%d, %d)", self._user_position.x(), self._user_position.y())
+        """释放左键：结束缩放或拖动，并保存本次会话的位置/大小"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self._resize_edge:
+                self._resize_edge = ""
+                self._resize_start_rect = None
+                self._resize_start_pos = None
+                self._user_size = self.size()
+                logger.debug(
+                    "Toast 用户调整大小为: %dx%d",
+                    self._user_size.width(), self._user_size.height(),
+                )
+            elif self._is_dragging:
+                self._is_dragging = False
+                self._drag_offset = None
+                self._user_position = self.pos()
+                logger.debug(
+                    "Toast 用户拖动到新位置: (%d, %d)",
+                    self._user_position.x(), self._user_position.y(),
+                )
+            # 恢复光标
+            if self._is_pinned:
+                self.setCursor(Qt.CursorShape.OpenHandCursor)
+            else:
+                self.setCursor(Qt.CursorShape.ArrowCursor)
         super().mouseReleaseEvent(event)
+
+    def resizeEvent(self, event) -> None:
+        """窗口尺寸变化时，把关闭按钮重新定位到右上角"""
+        super().resizeEvent(event)
+        if hasattr(self, "_close_btn"):
+            x = self.width() - self._close_btn.width() - 6
+            y = 4
+            self._close_btn.move(x, y)
+            self._close_btn.raise_()
+            # 文本标签随窗口整体重排（由布局管理），这里仅确保按钮置顶
 
     def paintEvent(self, event: QPaintEvent) -> None:
         """自定义绘制：阴影 + 圆角半透明背景

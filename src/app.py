@@ -216,7 +216,7 @@ class FastDividerApp(QObject):
             display = format_number_display(number)
             self._toast.show_toast(
                 f"已记录数字：{display}",
-                duration_ms=int(self._config.get("toast_duration", 1) * 1000),
+                duration_ms=int(self._config.get("display_duration", 2) * 1000),
             )
 
         elif self._state == AppState.WAIT_SECOND_NUMBER:

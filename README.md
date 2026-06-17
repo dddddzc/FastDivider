@@ -57,13 +57,12 @@ FastDivider/
 | 配置键 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
 | hotkey | string | "ctrl+shift" | 主快捷键（记录/计算） |
-| display_duration | float | 2 | 结果显示时长（秒） |
-| toast_duration | float | 1 | 提示 Toast 时长（秒） |
-| pin_mode | bool | false | 结果悬浮模式 |
+| display_duration | float | 2 | 显示时长（秒），提示与结果统一 |
+| pin_mode | bool | false | 框体长期悬浮（可手动关闭或拖动） |
 | display_position | string | "bottom_right" | Toast 位置 |
 | decimal_places | int | 2 | 小数位数（0-9） |
 | auto_start | bool | false | 开机自启动 |
-| theme | string | "light" | 主题（light/dark） |
+| theme | string | "light" | 框体颜色（light/dark），仅影响 Toast |
 | history_max | int | 100 | 最大历史记录条数 |
 
 快捷键格式：`ctrl+shift`、`ctrl+alt+d`、`shift+f1` 等
