@@ -24,6 +24,8 @@ DEFAULT_CONFIG = {
     "auto_start": False,
     "theme": "light",               # 框体颜色（light/dark），仅影响 Toast
     "history_max": 100,
+    "record_to_group": False,       # 计算后是否弹窗选择组别（在历史界面勾选）
+    "last_group": "默认",           # 上次选择的组别（计算后弹窗预选用）
 }
 
 # 配置文件路径

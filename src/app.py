@@ -26,7 +26,7 @@ from src.core.config import ConfigManager
 from src.core.number_parser import parse_number, format_division, format_number_display
 from src.core.clipboard_reader import ClipboardReader
 from src.core.hotkey_manager import HotkeyManager
-from src.core.history import HistoryManager
+from src.core.history import HistoryManager, DEFAULT_GROUP_NAME
 from src.core.updater import Updater
 from src.version import (
     APP_NAME, APP_DISPLAY_NAME, APP_EXE_NAME, APP_DESCRIPTION_FULL,
@@ -75,6 +75,9 @@ class FastDividerApp(QObject):
 
         # 防重入锁：防止快速连按快捷键导致并发剪贴板操作
         self._capture_lock = threading.Lock()
+
+        # 组别选择弹窗进行中标记：阻塞期间阻止新的热键捕获（模态 exec 期间轮询仍触发）
+        self._prompting_for_group = False
 
         # UI 模块
         self._toast = ToastWindow(
@@ -173,6 +176,10 @@ class FastDividerApp(QObject):
     # --- 主线程处理 ---
     def _handle_capture(self) -> None:
         """触发获取选中文本（在主线程中执行）"""
+        # 组别选择弹窗进行中：拒绝新的捕获，避免模态期间误触发 Ctrl+C
+        if self._prompting_for_group:
+            logger.debug("组别选择弹窗进行中，跳过本次捕获")
+            return
         # 防重入：如果上一次获取操作还未完成，跳过本次
         if not self._capture_lock.acquire(blocking=False):
             logger.debug("获取操作正在进行中，跳过本次按键")
@@ -249,9 +256,14 @@ class FastDividerApp(QObject):
             duration_ms = int(self._config.get("display_duration", 2) * 1000)
             self._toast.show_toast(expression, duration_ms=duration_ms, is_result=True)
 
+            # 决定记录到哪个组（若开启"记录到特定组"则弹窗选择，模态阻塞）
+            group = DEFAULT_GROUP_NAME
+            if self._config.get("record_to_group", False):
+                group = self._prompt_for_group()
+
             # 记录历史
             timestamp = datetime.now(timezone.utc).isoformat()
-            self._history.add(expression, a, b, result, timestamp)
+            self._history.add(expression, a, b, result, timestamp, group=group)
 
             # 重置状态，准备下一次计算
             self._state = AppState.WAIT_FIRST_NUMBER
@@ -296,16 +308,58 @@ class FastDividerApp(QObject):
         logger.info("UI 配置已更新")
 
     def _show_history(self) -> None:
-        """显示历史记录窗口"""
+        """显示历史记录窗口（复用已有实例，关闭后再打开只刷新）"""
         from src.ui.history_dialog import HistoryDialog
 
-        if self._history_dialog is None or not self._history_dialog.isVisible():
-            self._history_dialog = HistoryDialog(self._history)
+        if self._history_dialog is None:
+            self._history_dialog = HistoryDialog(self._history, self._config)
         else:
+            # 复用已有实例：刷新组别下拉与记录列表以反映运行时变更
             self._history_dialog.refresh()
         self._history_dialog.show()
         self._history_dialog.raise_()
         self._history_dialog.activateWindow()
+
+    def _prompt_for_group(self) -> str:
+        """计算后弹窗让用户选择本次记录所属的组别
+
+        模态 exec() 阻塞直至用户选择，满足"才能进行下一次计算"语义。
+        预选上次选择的组（从 config "last_group" 读，若该组已删除则回退 "默认"）。
+        用户取消则返回 "默认" 组（视为放弃分组选择）。
+
+        Returns:
+            用户选择的组名；取消时返回 DEFAULT_GROUP_NAME
+        """
+        from PyQt6.QtWidgets import QInputDialog, QDialog
+
+        groups = self._history.all_groups()
+        last = self._config.get("last_group", DEFAULT_GROUP_NAME)
+        if last not in groups:
+            last = DEFAULT_GROUP_NAME
+
+        dlg = QInputDialog(None)
+        dlg.setWindowTitle(APP_NAME)
+        dlg.setLabelText("请选择本次记录的组别：")
+        dlg.setComboBoxItems(groups)
+        dlg.setTextValue(last)
+        dlg.setComboBoxEditable(False)
+        # 置顶防止被结果 Toast 遮挡
+        dlg.setWindowFlags(dlg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+
+        # 阻塞期间拒绝新的热键捕获（模态 exec 期间 50ms 轮询仍触发）
+        self._prompting_for_group = True
+        try:
+            accepted = dlg.exec() == QDialog.DialogCode.Accepted
+        finally:
+            self._prompting_for_group = False
+
+        if accepted:
+            chosen = dlg.textValue()
+            self._config.set("last_group", chosen)
+            logger.info("记录到组别: %s", chosen)
+            return chosen
+        logger.info("用户取消组别选择，默认记入 %s 组", DEFAULT_GROUP_NAME)
+        return DEFAULT_GROUP_NAME
 
     def _set_auto_start(self, enabled: bool) -> None:
         """设置开机启动"""

@@ -35,7 +35,7 @@ GITHUB_ZIP_SUFFIX = ".zip"             # asset suffix for matching
 # ---------------------------------------------------------------------------
 APP_DIR_NAME = "FastDivider"           # %APPDATA%/FastDivider
 APP_LOG_NAME = "fastdivider.log"
-APP_HISTORY_NAME = "FastDivider_history.txt"
+APP_HISTORY_NAME = "FastDivider_history.csv"
 APP_CONFIG_NAME = "config.json"
 APP_CRASH_LOG_NAME = "crash.log"
 
