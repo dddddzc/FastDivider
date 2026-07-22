@@ -12,7 +12,7 @@ FastDivider（极速除法助手）是 **Windows-only** 单文件桌面工具：
 
 | 项 | 值 |
 |---|---|
-| 版本唯一源 | `pyproject.toml` 的 `version` 字段（当前 1.1.1） |
+| 版本唯一源 | `pyproject.toml` 的 `version` 字段（当前 1.1.2） |
 | 身份/路径常量集中地 | `src/version.py`（`APP_NAME`、`APP_MUTEX_NAME`、GitHub repo、注册表键等） |
 | 入口 | `src/main.py:main()` |
 | 主应用协调者 | `src/app.py:FastDividerApp(QObject)` |
@@ -103,13 +103,64 @@ FastDivider（极速除法助手）是 **Windows-only** 单文件桌面工具：
 
 ## 构建与发布流程
 
-1. 改版本：编辑 `pyproject.toml` 的 `version` 字段（如 `1.1.2`）。
-2. 构建：`python build.py`（自动清理上次产物 → 同步 `version_info.txt` → 查找 pywin32 DLL 与 Qt 平台插件 → PyInstaller → 生成 EXE 和 ZIP）。
-3. 验证：运行 `dist/FastDivider.exe`，确认热键、Toast、托盘、更新流程均正常。
-4. 发布：`git tag v1.1.2 && git push origin v1.1.2` → GitHub 创建 Release → 上传 `dist/FastDivider-v1.1.2.zip` 为附件。
-5. **约束**：Release tag 格式必须 `vX.Y.Z`；附件必须含以 `FastDivider` 开头、`.zip` 结尾的 ZIP，否则自动更新无法识别。
+### 1. 升版本号
 
-`release.py` 会按上述步骤打印指引，不执行任何副作用。
+编辑 `pyproject.toml` 的 `version` 字段（如 `1.1.2`）。这是版本唯一源，`build.py` 会自动同步到 `version_info.txt` 和 EXE 版本资源。升版前先查已有标签避免冲突：`git tag --list "v*"`。
+
+### 2. 构建
+
+```bash
+python build.py
+```
+
+自动执行：清理上次产物 → 同步 `version_info.txt` → 查找 pywin32 DLL 与 Qt 平台插件 → PyInstaller `--onefile --windowed` → 生成 `dist/FastDivider.exe`（约 37 MB）和 `dist/FastDivider-v{ver}.zip`（约 37 MB）。
+
+### 3. 验证
+
+运行 `dist/FastDivider.exe`，确认热键、Toast、托盘、历史记录、设置均正常。详见下方"测试与验证策略"。
+
+### 4. 提交代码
+
+```bash
+git add pyproject.toml version_info.txt src/ AGENTS.md   # 按实际改动选择
+git commit -m "feat: <简要描述> (v{ver})"
+```
+
+**不要提交**：`build/`、`dist/`、`FastDivider.spec`（自动生成）、`*.log`、临时 `config.json`。`version_info.txt` 虽自动生成但已纳入版本控制，需提交以保持同步。
+
+### 5. 推送代码和标签
+
+```bash
+git tag v{ver}
+git push https://dddddzc:$(gh auth token)@github.com/dddddzc/FastDivider.git master v{ver}
+```
+
+**注意**：代理环境中 `gh auth setup-git` 配置的 credential helper 非交互推送会失败（报 `could not read Username`）。必须用 `$(gh auth token)` 内联 token 推送。`gh auth status` 确认已登录。
+
+### 6. 创建 GitHub Release 并上传产物
+
+`gh release create` 依赖 GraphQL 端点，在代理环境中可能报 `EOF` 失败。改用 REST API 两步完成：
+
+```bash
+# 6a. 创建 Release（--jq .id 提取 release ID）
+gh api repos/dddddzc/FastDivider/releases -X POST \
+  -f tag_name="v{ver}" -f name="v{ver}" -f body="<release notes>" --jq .id
+
+# 6b. 上传 ZIP 产物（用上一步返回的 release ID）
+TOKEN=$(gh auth token)
+curl.exe -s -L -X POST \
+  -H "Authorization: token $TOKEN" \
+  -H "Content-Type: application/zip" \
+  --data-binary @"dist/FastDivider-v{ver}.zip" \
+  "https://uploads.github.com/repos/dddddzc/FastDivider/releases/<release_id>/assets?name=FastDivider-v{ver}.zip"
+```
+
+### 约束
+
+- Release tag 格式必须 `vX.Y.Z`。
+- 附件必须含以 `FastDivider` 开头、`.zip` 结尾的 ZIP，否则自动更新无法识别。
+- `gh release create`（GraphQL）不可靠时，用 `gh api`（REST）+ `curl.exe` 上传替代。
+- `release.py` 会按上述步骤打印指引，不执行任何副作用。
 
 ## 测试与验证策略
 
